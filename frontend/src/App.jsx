@@ -13,7 +13,7 @@ function App() {
   useEffect(() => {
     fetch(`${API_URL}/health`)
       .then((res) => res.json())
-      .then((data) => setBackendStatus(`Backend: ${data.status}`))
+      .then((data) => setBackendStatus(`Backend: ${data.status} | DB: ${data.db ?? 'not connected'}`))
       .catch(() => setBackendStatus('Backend: unreachable'))
   }, [])
 
