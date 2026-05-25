@@ -18,4 +18,4 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://hello-world-api-mwyh.onrender.com
+        value: https://sandbox-backend-tkn2.onrender.com
