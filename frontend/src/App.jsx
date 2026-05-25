@@ -1,11 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import heroImg from './assets/hero.png'
 import './App.css'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 function App() {
   const [count, setCount] = useState(0)
+  const [backendStatus, setBackendStatus] = useState('checking...')
+
+  useEffect(() => {
+    fetch(`${API_URL}/health`)
+      .then((res) => res.json())
+      .then((data) => setBackendStatus(`Backend: ${data.status}`))
+      .catch(() => setBackendStatus('Backend: unreachable'))
+  }, [])
 
   return (
     <>
@@ -18,6 +28,7 @@ function App() {
         <div>
           <h1>It works!</h1>
           <p>Frontend is up and running.</p>
+          <p><strong>{backendStatus}</strong></p>
         </div>
         <button
           type="button"
