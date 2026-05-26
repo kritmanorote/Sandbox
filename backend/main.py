@@ -88,9 +88,9 @@ def get_leaderboard():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "SELECT name, score, created_at FROM leaderboard ORDER BY score DESC LIMIT 5"
+        "SELECT name, MAX(score) as score FROM leaderboard GROUP BY name ORDER BY score DESC LIMIT 5"
     )
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return [{"name": r[0], "score": r[1], "date": r[2].isoformat()} for r in rows]
+    return [{"name": r[0], "score": r[1]} for r in rows]
