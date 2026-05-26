@@ -1,447 +1,462 @@
 <!DOCTYPE html>
-<html lang="en-us"><script src="https://pygame-web.github.io/cdn/0.9.3/pythons.js" type=module id="site" data-python="python3.12" data-LINES=42 data-COLUMNS=132 data-os="vtx,gui" async defer>#<!--
-
-print("""
-Loading pacman from pacman.apk
-    Pygbag Version : 0.9.3
-    Template Version : 0.9.3
-    Python  : 3.12
-    CDN URL : https://pygame-web.github.io/cdn/0.9.3/
-    Screen  : 1280x720
-    Title   : pacman
-    Folder  : pacman
-    Authors : pgw
-    SPDX-License-Identifier: cookiecutter.spdx
-
-""")
-
-import sys
-import asyncio
-import platform
-import json
-from pathlib import Path
-
-# do not rename
-async def custom_site():
-    import embed
-    platform.document.body.style.background = "#7f7f7f"
-
-    platform.window.transfer.hidden = true
-    platform.window.canvas.style.visibility = "visible"
-
-
-    bundle = "pacman"
-
-    # the C or js loader could do that but be explicit.
-    appdir = Path(f"/data/data/{bundle}") # /data/data/pacman
-    appdir.mkdir()
-
-
-    # unpack filesystem from compressed archive into work dir
-    if platform.window.location.host.find('.itch.zone')>0:
-        import zipfile
-        async with platform.fopen("pacman.apk", "rb") as archive:
-            with zipfile.ZipFile(archive) as zip_ref:
-                zip_ref.extractall(appdir.as_posix())
-    else:
-        import tarfile
-        async with platform.fopen("pacman.tar.gz", "rb") as archive:
-            tar = tarfile.open(fileobj=archive, mode="r:gz")
-            tar.extractall(path=appdir.as_posix(), filter='tar')
-            tar.close()
-
-    # preloader will change to work dir and prepend it to sys.path
-    platform.run_main(PyConfig, loaderhome= appdir / "assets", loadermain=None)
-
-
-    # wait preloading complete : that includes images and wasm compilation of bundled modules
-    while embed.counter()<0:
-        await asyncio.sleep(.1)
-
-    main = appdir / "assets" / "main.py"
-
-    # TODO: test for window.webkitAudioContext and block aio loop until gesture if accessing media manager play
-    # before a gesture is recorded ( touch or click )
-
-    # test/wait user media interaction
-    if not platform.window.MM.UME:
-
-        # now that apk is mounted we have access to font cache
-        # but we need to fill __file__ that is not yet set
-        __import__(__name__).__file__ = main
-
-        # now make a prompt
-        msg  = "Ready to start ! Please click/touch page"
-        platform.window.infobox.innerText = msg
-        print("\n"*4, f"    * Waiting for media user engagement. {msg} *" , "\n"*4)
-
-        while not platform.window.MM.UME:
-            await asyncio.sleep(.1)
-
-    # start async top level machinery if not started and add a console in any case if requested.
-    await TopLevel_async_handler.start_toplevel(platform.shell, console=window.python.config.debug)
-
-    # now that apk is mounted we have access to font cache
-    # but we need to fill __file__/__name__ that are not yet set
-    __import__(__name__).__file__ = main
-
-
-    def ui_callback(pkg):
-        platform.window.infobox.innerText = f"installing {pkg}"
-
-    await shell.source(main, callback=ui_callback)
-
-    # if you don't reach that step
-    # your main.py has an infinite sync loop somewhere !
-
-    platform.window.infobox.style.display = "none"
-    platform.window.config.gui_divider = 1
-    platform.window.window_resize()
-    print("default.tmpl: done")
-
-    shell.interactive()
-
-asyncio.run( custom_site() )
-
-
-
-
-
-
-
-
-
-
-
-
-# BEGIN BLOCK
-#
-# now this is the html part you can (and should) customize
-# It is not mandatory : pygame-script when it reads the first line (also called
-# shebang ) of above code create absolute minimal widget set
-# required for running with default rules
-#
-# do not alter that comment block it is separating python code from html code
-# =============================================================================
-# --></script><head><!--
-//=============================================================================
-//
-//
-//
-//
-//
-//
-//
-
-    {%- if cookiecutter.comment != "" -%}
-{{cookiecutter.comment}}
-    {% endif %}
-
---><script type="application/javascript">
-// END BLOCK
-
-
-
-// this dict is available under PyConfig.config from __main__
-
-config = {
-    xtermjs : "1" ,
-    _sdl2 : "canvas",
-    user_canvas : 0,
-    user_canvas_managed : 0,
-    gui_divider : 2,
-    ume_block : 0,
-    can_close : 0,
-    archive : "pacman",
-    gui_debug : 2,
-    cdn : "https://pygame-web.github.io/cdn/0.9.3/",
-    autorun : 0,
-    PYBUILD : "3.12",
-    fb_ar   :  1.77,
-    fb_width : "1280",
-    fb_height : "720"
-}
-
-function show_infobox() {
-    infobox.style.display = "block";
-
-    // Measure box
-    const w = infobox.offsetWidth;
-    const h = infobox.offsetHeight;
-
-    // Center in viewport
-    const left = (window.innerWidth - w) / 2;
-    const top = (window.innerHeight - h) / 2;
-
-    infobox.style.left = left + "px";
-    infobox.style.top = top + "px";
-}
-
-</script>
-
-    <title>pacman</title>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="viewport" content="height=device-height, initial-scale=1.0">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes"/>
-
-
-    <link rel="icon" type="image/png" href="favicon.png" sizes="16x16">
-
-    <style>
-        #status {
-            display: inline-block;
-            vertical-align: top;
-            margin-top: 20px;
-            margin-left: 30px;
-            font-weight: bold;
-            color: rgb(120, 120, 120);
-        }
-
-        #progress {
-            height: 20px;
-            width: 300px;
-        }
-
-        #infobox {
-            position: fixed; /* center relative to viewport */
-            background: green;
-            color: blue;
-            font-weight: bold;
-            padding: 12px 24px;
- /*           display: none; */
-            z-index: 999999;
-        }
-        div.emscripten { text-align: center; }
-        div.emscripten_border { border: 1px solid black; }
-        div.thick_border { border: 4px solid black; }
-
-        /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
-        /* average size of droid screen 470dp x 320dp  */
-        canvas.emscripten {
-            border: 0px none;
-            background-color: transparent;
-            width: 100%;
-            height: 100%;
-            z-index: 5;
-
-            padding: 0;
-            margin: 0 auto;
-
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            right: 0;
-        }
-
-        body {
-            font-family: arial;
-            margin: 0;
-            padding: none;
-            background-color:powderblue;
-        }
-
-        .topright{
-           position:absolute;
-           top:0px;
-           right:0px;
-        }
-
-        .bottomright {
-            position:absolute;
-            top: 40%;
-            right: 0px;
-        }
-
-        .center {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .trinfo{
-           position: relative;
-           right: 0px;
-           border: 1px solid black;
-        }
-
-        .framed{
-           position: relative;
-           top: 150px;
-           right: 10px;
-           border: 1px solid black;
-        }
-    </style>
-
-    <script>
-/*
-        if (navigator.serviceWorker)
-            navigator.serviceWorker.register("https://pygame-web.github.io/cdn/0.9.3/pygbag0.9.3.js")
-        else
-            console.warn("Service workers not supported")
-*/
-    </script>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/BrowserFS/2.0.0/browserfs.min.js"></script>
-
-    <script>
-    // Pygbag only supports integer DPRs (1 or 2); round to nearest to suppress warning
-    (function() {
-        const dpr = Math.round(window.devicePixelRatio || 1);
-        Object.defineProperty(window, 'devicePixelRatio', { get: function() { return dpr; } });
-    })();
-    </script>
-
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pacman</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111; display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+canvas { display: block; max-width: 100vw; max-height: 100vh; }
+</style>
 </head>
-
 <body>
+<canvas id="canvas"></canvas>
+<script>
+const SCREEN_W = 800, SCREEN_H = 500, HUD_HEIGHT = 60;
+const MAZE_H = SCREEN_H - HUD_HEIGHT;
+const TILE = 20;
+const COLS = SCREEN_W / TILE;   // 40
+const ROWS = MAZE_H / TILE;     // 22
+const FPS = 60;
+const PACMAN_SPEED = 2;
+const GHOST_SPEED = 1;
+const FRIGHTEN_TICKS = 7 * FPS;
+const WALL = 0, DOT = 1, PELLET = 2, EMPTY = 3;
 
-    <div id="transfer" align=center>
-<!--        <div class="spinner" id='spinner'></div> -->
-        <div class="emscripten" id="status">Downloading...</div>
-        <div class="emscripten">
-            <progress value="0" max="100" id="progress"></progress>
-        </div>
-    </div>
+const C = {
+    black: '#000', blue: '#2121ff', lblue: '#6464ff',
+    yellow: '#ffff00', white: '#fff', red: '#ff0000',
+    pink: '#ffb8ff', cyan: '#00ffff', orange: '#ffb851',
+    scared: '#0000c8', dotc: '#ffb9af', dgray: '#282828',
+};
 
+// ── Maze ──────────────────────────────────────────────────────────────────────
 
+function makeMaze() {
+    const rows = [];
+    for (let r = 0; r < ROWS; r++) {
+        if (r === 0 || r === ROWS - 1) { rows.push(Array(COLS).fill('#')); continue; }
+        rows.push(Array.from({length: COLS}, (_, c) => (c === 0 || c === COLS - 1) ? '#' : '.'));
+    }
+    const wr = (r1, c1, r2, c2) => {
+        for (let r = r1; r <= r2; r++)
+            for (let c = c1; c <= c2; c++)
+                if (r >= 0 && r < ROWS && c >= 0 && c < COLS) rows[r][c] = '#';
+    };
+    wr(2,2,4,4);   wr(2,6,4,11);  wr(2,13,4,17); wr(2,19,4,20);
+    wr(2,22,4,26); wr(2,28,4,33); wr(2,35,4,37);
+    wr(6,2,7,4);   wr(6,6,7,8);   wr(6,10,7,14); wr(6,16,7,23);
+    wr(6,25,7,29); wr(6,31,7,33); wr(6,35,7,37);
+    wr(9,0,17,4);  wr(9,35,17,39);
+    wr(9,6,10,14); wr(9,25,10,33);
+    wr(11,16,14,23);
+    for (let r = 12; r < 14; r++) for (let c = 17; c < 23; c++) rows[r][c] = ' ';
+    for (let c = 18; c < 22; c++) rows[11][c] = ' ';
+    wr(17,2,18,4);  wr(17,6,18,11);  wr(17,13,18,17);
+    wr(17,22,18,26); wr(17,28,18,33); wr(17,35,18,37);
+    rows[1][1] = 'o'; rows[1][COLS-2] = 'o';
+    rows[ROWS-2][1] = 'o'; rows[ROWS-2][COLS-2] = 'o';
+    return rows.map(r => r.join(''));
+}
 
-    <canvas class="emscripten" id="canvas"
-width="1px"
-height="1px"
-    oncontextmenu="event.preventDefault()" tabindex=1>
-    </canvas>
+const MAZE_TEMPLATE = makeMaze();
 
-    <canvas class="emscripten" id="canvas3d"
-width="1280px"
-height="720px"
-    oncontextmenu="event.preventDefault()" tabindex=1 hidden>
-    </canvas>
+function buildMaze(tpl) {
+    const grid = []; let dots = 0;
+    for (const s of tpl) {
+        const row = [];
+        for (const ch of s) {
+            if (ch === '#') row.push(WALL);
+            else if (ch === 'o') { row.push(PELLET); dots++; }
+            else if (ch === '.') { row.push(DOT); dots++; }
+            else row.push(EMPTY);
+        }
+        grid.push(row);
+    }
+    return { grid, dots };
+}
 
-    <div id="infobox">Loading, please wait ...</div>
+function drawTile(ctx, r, c, tile) {
+    const x = c * TILE, y = r * TILE;
+    ctx.fillStyle = C.black;
+    ctx.fillRect(x, y, TILE, TILE);
+    if (tile === WALL) {
+        ctx.fillStyle = C.blue;
+        ctx.fillRect(x, y, TILE, TILE);
+        ctx.strokeStyle = C.lblue;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, TILE - 1, TILE - 1);
+    } else if (tile === DOT) {
+        ctx.fillStyle = C.dotc;
+        ctx.beginPath(); ctx.arc(x + TILE/2, y + TILE/2, 2, 0, Math.PI*2); ctx.fill();
+    } else if (tile === PELLET) {
+        ctx.fillStyle = C.white;
+        ctx.beginPath(); ctx.arc(x + TILE/2, y + TILE/2, 5, 0, Math.PI*2); ctx.fill();
+    }
+}
 
-    <div id=html></div>
+// ── Pacman ────────────────────────────────────────────────────────────────────
 
-    <div id=crt  class=bottomright >
+class Pacman {
+    constructor() { this.reset(); }
 
-        <div id="system" hidden>
-            <div class="button-container">
-                <button id="aiostop" disabled>AIO ⏏︎</button>
-                <button id="aiopaused_true" disabled>AIO ■</button>
-                <button id="aiopaused_false" disabled>AIO ▶</button>
-                <button id="pygame_mixer_music_pause" disabled>Music ■</button>
-            </div>
-
-            <div class="button-container">
-                <div id=load_min>min</div>
-                <div id=load_avg>avg</div>
-                <div id=load_max>max</div>
-              <button id="load_rst" disabled>RESET</button>
-            </div>
-
-            <div id="level">(battery level unknown)</div>
-            <div id="stateBattery">(charging state unknown)</div>
-
-        </div>
-
-        <div id=box class="emscripten_border" hidden=true>
-
-            <div id="info" class="trinfo"></div>
-
-            <iframe id="iframe" class="framed" name="iframe"
-width="470px" height="90%"
-allowtransparency="true"
-style="z-index: 10;"
-style="background: #FFFFFF;"
-frameborder="1"
-                allowfullscreen="true"
-                webkitallowfullscreen="true"
-                msallowfullscreen="true"
-                mozallowfullscreen="true"
-                sandbox="allow-same-origin allow-top-navigation allow-scripts allow-pointer-lock"
-                allow="autoplay; fullscreen *; geolocation; microphone; camera; midi; monetization; xr-spatial-tracking; gamepad; gyroscope; accelerometer; xr; cross-origin-isolated"
-                src="https://pygame-web.github.io/cdn/0.9.3/empty.html"
-                scrolling="yes">
-            </iframe>
-        </div>
-
-    </div>
-
-
-    <div id="dlg" hidden>
-        <input type="file" id="dlg_multifile" multiple accept="image/*">
-        <label for="dlg_multifile">Select files</label>
-    </div>
-
-    <div id="pyconsole">
-        <div id="terminal" tabIndex=1 align="left"></div>
-    </div>
-
-    <script type="application/javascript">
-
-    globalThis.__canvas_resized = (self, ecw, ech) => {
-        console.warn("TODO: panda3d canvas monitor", self, ecw, ech)
+    reset() {
+        this.col = Math.floor(COLS / 2);
+        this.row = ROWS - 4;
+        this.px = this.col * TILE + TILE / 2;
+        this.py = this.row * TILE + TILE / 2;
+        this.dir = [0, 0]; this.nextDir = [1, 0];
+        this.mouthAngle = 30; this.mouthDir = 1;
+        this.radius = TILE / 2 - 2;
     }
 
-    async function custom_onload(debug_hidden) {
-        // this is called before anything python is loaded
-        // make your js customization here
-        console.log(__FILE__, "custom_onload")
-
-        pyconsole.hidden = debug_hidden
-        system.hidden = debug_hidden
-        transfer.hidden = debug_hidden
-        info.hidden = debug_hidden
-        box.hidden =  debug_hidden
-
-        show_infobox()
+    handleKey(key) {
+        if (key === 'ArrowLeft')  this.nextDir = [-1, 0];
+        if (key === 'ArrowRight') this.nextDir = [1, 0];
+        if (key === 'ArrowUp')    this.nextDir = [0, -1];
+        if (key === 'ArrowDown')  this.nextDir = [0, 1];
     }
 
-    function custom_prerun(){
-        // no python main and no (MEMFS + VFS) yet.
-        console.log(__FILE__, "custom_prerun")
-
+    update(maze) {
+        const cx = this.col * TILE + TILE / 2;
+        const cy = this.row * TILE + TILE / 2;
+        if (Math.abs(this.px - cx) <= PACMAN_SPEED && Math.abs(this.py - cy) <= PACMAN_SPEED) {
+            const [ndc, ndr] = this.nextDir;
+            const nc = this.col + ndc, nr = this.row + ndr;
+            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && maze[nr][nc] !== WALL) {
+                if (ndc !== this.dir[0] || ndr !== this.dir[1]) { this.px = cx; this.py = cy; }
+                this.dir = [ndc, ndr];
+            }
+        }
+        const [dc, dr] = this.dir;
+        if (dc !== 0 || dr !== 0) {
+            const npx = this.px + dc * PACMAN_SPEED, npy = this.py + dr * PACMAN_SPEED;
+            const nc = Math.floor(npx / TILE), nr = Math.floor(npy / TILE);
+            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && maze[nr][nc] !== WALL) {
+                this.px = npx; this.py = npy;
+            } else {
+                this.px = cx; this.py = cy;
+            }
+        }
+        if (this.px < 0) this.px = SCREEN_W - 1;
+        if (this.px >= SCREEN_W) this.px = 0;
+        this.col = Math.max(0, Math.min(COLS - 1, Math.floor(this.px / TILE)));
+        this.row = Math.max(0, Math.min(ROWS - 1, Math.floor(this.py / TILE)));
+        this.mouthAngle += 3 * this.mouthDir;
+        if (this.mouthAngle >= 45) this.mouthDir = -1;
+        if (this.mouthAngle <= 0)  this.mouthDir = 1;
     }
 
-    function custom_postrun(){
-        // python main and no VFS filesystem yet.
-        console.log(__FILE__, "custom_postrun")
+    draw(ctx) {
+        const ix = Math.round(this.px), iy = Math.round(this.py);
+        ctx.fillStyle = C.yellow;
+        ctx.beginPath(); ctx.arc(ix, iy, this.radius, 0, Math.PI * 2); ctx.fill();
+        if (this.dir[0] !== 0 || this.dir[1] !== 0) {
+            const angle = Math.atan2(this.dir[1], this.dir[0]);
+            const half = (this.mouthAngle / 2) * Math.PI / 180;
+            const r = this.radius + 1;
+            ctx.fillStyle = C.black;
+            ctx.beginPath();
+            ctx.moveTo(ix, iy);
+            ctx.lineTo(ix + r * Math.cos(angle - half), iy + r * Math.sin(angle - half));
+            ctx.lineTo(ix + r * Math.cos(angle + half), iy + r * Math.sin(angle + half));
+            ctx.closePath(); ctx.fill();
+        }
+    }
+}
 
+// ── Ghost ─────────────────────────────────────────────────────────────────────
+
+const DIRS4 = [[0,-1],[0,1],[-1,0],[1,0]];
+
+class Ghost {
+    constructor(col, row, color, scatterTarget) {
+        this.startCol = col; this.startRow = row;
+        this.color = color; this.scatterTarget = scatterTarget;
+        this.reset();
     }
 
-    function debug() {
-        // allow to gain access to dev tools from js console
-        // but only on desktop. difficult to reach when in iframe
-        python.config.debug = true
-        custom_onload(false)
-        Module.PyRun_SimpleString("shell.uptime()")
-        window_resize()
+    reset() {
+        this.col = this.startCol; this.row = this.startRow;
+        this.px = this.col * TILE + TILE / 2;
+        this.py = this.row * TILE + TILE / 2;
+        this.dir = [0, -1]; this.mode = 'scatter';
+        this.frightenTimer = 0; this.radius = TILE / 2 - 2;
     }
 
-    function info_inline(data){
-        document.getElementById("info").innerHTML = data
+    frighten() {
+        if (this.mode !== 'eaten') { this.mode = 'frightened'; this.frightenTimer = FRIGHTEN_TICKS; }
     }
 
-    function info_online(url) {
-        // display info about current APK
-        fetch( url /*, options */)
-            .then((response) => response.text())
-            .then((html) => {
-                info_inline(html);
-        })
-        .catch((error) => {
-            console.warn(error);
+    isAligned() {
+        const cx = this.col * TILE + TILE / 2, cy = this.row * TILE + TILE / 2;
+        return Math.abs(this.px - cx) < GHOST_SPEED + 1 && Math.abs(this.py - cy) < GHOST_SPEED + 1;
+    }
+
+    chooseDir(maze, pacman) {
+        const rev = [-this.dir[0], -this.dir[1]];
+        if (this.mode === 'frightened') {
+            const opts = DIRS4.filter(d =>
+                !(d[0]===rev[0] && d[1]===rev[1]) &&
+                this.row+d[1] >= 0 && this.row+d[1] < ROWS &&
+                this.col+d[0] >= 0 && this.col+d[0] < COLS &&
+                maze[this.row+d[1]][this.col+d[0]] !== WALL);
+            if (opts.length) this.dir = opts[Math.floor(Math.random() * opts.length)];
+            return;
+        }
+        let target;
+        if (this.mode === 'eaten') target = [Math.floor(COLS/2), Math.floor(ROWS/2)];
+        else if (this.mode === 'scatter') target = this.scatterTarget;
+        else {
+            target = [pacman.col, pacman.row];
+            if (this.color === C.pink) {
+                const [dc, dr] = pacman.dir;
+                target = [pacman.col + 4*dc, pacman.row + 4*dr];
+            }
+        }
+        let best = null, bestD = Infinity;
+        for (const d of DIRS4) {
+            if (d[0]===rev[0] && d[1]===rev[1]) continue;
+            const nc = this.col+d[0], nr = this.row+d[1];
+            if (nr<0||nr>=ROWS||nc<0||nc>=COLS||maze[nr][nc]===WALL) continue;
+            const dist = (nc-target[0])**2 + (nr-target[1])**2;
+            if (dist < bestD) { bestD = dist; best = d; }
+        }
+        if (best) this.dir = best;
+    }
+
+    update(maze, pacman) {
+        if (this.mode === 'frightened' && --this.frightenTimer <= 0) this.mode = 'chase';
+        if (this.mode === 'eaten') {
+            const hx = Math.floor(COLS/2)*TILE+TILE/2, hy = Math.floor(ROWS/2)*TILE+TILE/2;
+            if (Math.abs(this.px-hx) < TILE && Math.abs(this.py-hy) < TILE) this.mode = 'scatter';
+        }
+        const speed = this.mode === 'eaten' ? GHOST_SPEED * 2 : GHOST_SPEED;
+        if (this.isAligned()) {
+            const old = [...this.dir];
+            this.chooseDir(maze, pacman);
+            if (this.dir[0]!==old[0] || this.dir[1]!==old[1]) {
+                this.px = this.col*TILE+TILE/2; this.py = this.row*TILE+TILE/2;
+            }
+        }
+        const [dc, dr] = this.dir;
+        const npx = this.px+dc*speed, npy = this.py+dr*speed;
+        const nc = Math.floor(npx/TILE), nr = Math.floor(npy/TILE);
+        if (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&maze[nr][nc]!==WALL) {
+            this.px = npx; this.py = npy;
+        } else {
+            this.px = this.col*TILE+TILE/2; this.py = this.row*TILE+TILE/2;
+        }
+        this.col = Math.max(0, Math.min(COLS-1, Math.floor(this.px/TILE)));
+        this.row = Math.max(0, Math.min(ROWS-1, Math.floor(this.py/TILE)));
+    }
+
+    draw(ctx) {
+        const ix = Math.round(this.px), iy = Math.round(this.py), r = this.radius;
+        if (this.mode === 'eaten') {
+            ctx.fillStyle = C.white;
+            ctx.beginPath(); ctx.arc(ix-r/3, iy-r/4, r/4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(ix+r/3, iy-r/4, r/4, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = C.cyan;
+            ctx.beginPath(); ctx.arc(ix-r/3, iy-r/4, r/8, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(ix+r/3, iy-r/4, r/8, 0, Math.PI*2); ctx.fill();
+            return;
+        }
+        const flash = this.mode==='frightened' && this.frightenTimer < 2*FPS && Math.floor(this.frightenTimer/15)%2===0;
+        const color = this.mode==='frightened' ? (flash ? C.white : C.scared) : this.color;
+        ctx.fillStyle = color;
+        ctx.fillRect(ix-r, iy, r*2, r);
+        ctx.beginPath(); ctx.arc(ix, iy, r, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = C.black;
+        for (let i = 0; i < 3; i++) {
+            const bx = ix - r + i * Math.floor(r*2/3) + Math.floor(r/3);
+            ctx.beginPath(); ctx.arc(bx, iy+r, Math.floor(r/3), 0, Math.PI*2); ctx.fill();
+        }
+        if (this.mode !== 'frightened') {
+            ctx.fillStyle = C.white;
+            ctx.beginPath(); ctx.arc(ix-r/3, iy-r/4, r/4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(ix+r/3, iy-r/4, r/4, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = C.blue;
+            ctx.beginPath(); ctx.arc(ix-r/3, iy-r/4, r/8, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(ix+r/3, iy-r/4, r/8, 0, Math.PI*2); ctx.fill();
+        }
+    }
+}
+
+// ── Game ──────────────────────────────────────────────────────────────────────
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.canvas.width = SCREEN_W;
+        this.canvas.height = SCREEN_H;
+        this.reset();
+        document.addEventListener('keydown', e => {
+            if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+            if (this.state === 'playing') this.pacman.handleKey(e.key);
+            else if (e.key === ' ' && ['start','game_over','win'].includes(this.state)) {
+                this.reset(); this.state = 'playing';
+            }
         });
     }
 
-    function frame_online(url) {
-        window.frames["iframe"].location = url;
+    reset() {
+        const { grid, dots } = buildMaze(MAZE_TEMPLATE);
+        this.maze = grid; this.dotsRemaining = dots;
+        this.score = 0; this.lives = 3; this.state = 'start';
+        this.pacman = new Pacman();
+        this.ghosts = [
+            new Ghost(18, 12, C.red,    [COLS-1, 0]),
+            new Ghost(21, 12, C.pink,   [0, 0]),
+            new Ghost(18, 13, C.cyan,   [COLS-1, ROWS-1]),
+            new Ghost(21, 13, C.orange, [0, ROWS-1]),
+        ];
+        this.globalMode = 'scatter'; this.modeTimer = 7 * FPS;
+        this.dyingTimer = 0; this.eatenStreak = 0;
+        this.buildBg();
     }
 
-    </script>
+    buildBg() {
+        this.bg = document.createElement('canvas');
+        this.bg.width = SCREEN_W; this.bg.height = SCREEN_H;
+        this.bgCtx = this.bg.getContext('2d');
+        this.bgCtx.fillStyle = C.black;
+        this.bgCtx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+        for (let r = 0; r < ROWS; r++)
+            for (let c = 0; c < COLS; c++)
+                drawTile(this.bgCtx, r, c, this.maze[r][c]);
+        this.bgCtx.strokeStyle = C.blue;
+        this.bgCtx.lineWidth = 2;
+        this.bgCtx.beginPath();
+        this.bgCtx.moveTo(0, MAZE_H); this.bgCtx.lineTo(SCREEN_W, MAZE_H);
+        this.bgCtx.stroke();
+    }
 
+    resetPositions() {
+        this.pacman.reset();
+        for (const g of this.ghosts) g.reset();
+    }
+
+    checkDots() {
+        const r = this.pacman.row, c = this.pacman.col;
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+        const tile = this.maze[r][c];
+        if (tile === DOT || tile === PELLET) {
+            this.maze[r][c] = EMPTY;
+            drawTile(this.bgCtx, r, c, EMPTY);
+            this.score += tile === DOT ? 10 : 50;
+            this.dotsRemaining--;
+            if (tile === PELLET) {
+                this.eatenStreak = 0;
+                for (const g of this.ghosts) g.frighten();
+            }
+        }
+    }
+
+    checkGhosts() {
+        for (const g of this.ghosts) {
+            if (Math.hypot(g.px - this.pacman.px, g.py - this.pacman.py) < this.pacman.radius + g.radius - 2) {
+                if (g.mode === 'frightened') {
+                    g.mode = 'eaten';
+                    this.eatenStreak++;
+                    this.score += 200 * (1 << (this.eatenStreak - 1));
+                } else if (g.mode !== 'eaten') {
+                    this.lives--;
+                    this.dyingTimer = Math.floor(1.5 * FPS);
+                    this.state = 'dying';
+                    return;
+                }
+            }
+        }
+    }
+
+    updateGlobalMode() {
+        if (--this.modeTimer <= 0) {
+            this.globalMode = this.globalMode === 'scatter' ? 'chase' : 'scatter';
+            this.modeTimer = this.globalMode === 'chase' ? 20 * FPS : 7 * FPS;
+            for (const g of this.ghosts)
+                if (g.mode !== 'frightened' && g.mode !== 'eaten') g.mode = this.globalMode;
+        }
+    }
+
+    drawHUD() {
+        const ctx = this.ctx;
+        ctx.fillStyle = C.dgray;
+        ctx.fillRect(0, MAZE_H, SCREEN_W, HUD_HEIGHT);
+        ctx.textBaseline = 'middle';
+        ctx.font = '16px monospace';
+        ctx.fillStyle = C.white; ctx.textAlign = 'left';
+        ctx.fillText(`SCORE  ${String(this.score).padStart(6)}`, 10, MAZE_H + 22);
+        ctx.fillStyle = C.yellow; ctx.textAlign = 'center';
+        ctx.fillText('PACMAN', SCREEN_W / 2, MAZE_H + 22);
+        for (let i = 0; i < this.lives; i++) {
+            const cx = SCREEN_W - 20 - i * 26, cy = MAZE_H + 30;
+            ctx.fillStyle = C.yellow;
+            ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = C.black;
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx+10, cy-5); ctx.lineTo(cx+10, cy+5);
+            ctx.closePath(); ctx.fill();
+        }
+    }
+
+    drawOverlay(lines) {
+        const ctx = this.ctx;
+        const panelH = 30 + lines.length * 62;
+        ctx.fillStyle = 'rgba(0,0,0,0.78)';
+        ctx.fillRect(SCREEN_W/2 - 190, 148, 380, panelH);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (let i = 0; i < lines.length; i++) {
+            const [text, color, big] = lines[i];
+            ctx.fillStyle = color;
+            ctx.font = big ? 'bold 42px monospace' : '16px monospace';
+            ctx.fillText(text, SCREEN_W/2, 195 + i * 62);
+        }
+    }
+
+    update() {
+        if (this.state === 'playing') {
+            this.pacman.update(this.maze);
+            this.updateGlobalMode();
+            for (const g of this.ghosts) g.update(this.maze, this.pacman);
+            this.checkDots();
+            this.checkGhosts();
+            if (this.dotsRemaining <= 0) this.state = 'win';
+        } else if (this.state === 'dying') {
+            if (--this.dyingTimer <= 0) {
+                if (this.lives <= 0) this.state = 'game_over';
+                else { this.resetPositions(); this.state = 'playing'; }
+            }
+        }
+    }
+
+    draw() {
+        const ctx = this.ctx;
+        ctx.drawImage(this.bg, 0, 0);
+        if (this.state !== 'dying' || Math.floor(this.dyingTimer / 8) % 2 === 0)
+            this.pacman.draw(ctx);
+        for (const g of this.ghosts) g.draw(ctx);
+        this.drawHUD();
+        if (this.state === 'start')
+            this.drawOverlay([['PACMAN', C.yellow, true], ['Press SPACE to start', C.white, false]]);
+        else if (this.state === 'game_over')
+            this.drawOverlay([['GAME OVER', C.red, true], [`Score: ${this.score}`, C.white, false], ['Press SPACE to retry', C.white, false]]);
+        else if (this.state === 'win')
+            this.drawOverlay([['YOU WIN!', C.yellow, true], [`Score: ${this.score}`, C.white, false], ['Press SPACE to play again', C.white, false]]);
+    }
+
+    run() {
+        let last = 0;
+        const step = ts => {
+            if (ts - last >= 1000 / FPS) { last = ts; this.update(); this.draw(); }
+            requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+    }
+}
+
+new Game().run();
+</script>
 </body>
 </html>
