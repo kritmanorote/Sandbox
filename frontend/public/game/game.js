@@ -223,6 +223,7 @@ class GameScene extends Phaser.Scene {
                 const res = await fetch(`${API_URL}/leaderboard`);
                 const top = await res.json();
                 input.remove();
+                statusText.setVisible(false);
                 this.showLeaderboard(top);
             } catch (e) {
                 statusText.setText('Could not save score.');
