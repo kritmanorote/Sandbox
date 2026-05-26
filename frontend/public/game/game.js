@@ -186,30 +186,19 @@ class GameScene extends Phaser.Scene {
             fontSize: '30px', color: '#00ffff', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
-        // DOM name input — positioned relative to the Phaser canvas
-        const canvas = this.sys.game.canvas;
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = rect.width / WIDTH;
-        const scaleY = rect.height / HEIGHT;
-        const inputX = rect.left + (WIDTH / 2) * scaleX;
-        const inputY = rect.top + (HEIGHT / 2 + 20) * scaleY;
-
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = 'Enter your name';
-        input.maxLength = 32;
-        Object.assign(input.style, {
-            position: 'fixed',
-            left: `${inputX}px`, top: `${inputY}px`,
-            transform: 'translateX(-50%)',
+        // DOM name input via Phaser DOM — auto-aligns with canvas scale
+        const inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        inputEl.placeholder = 'Enter your name';
+        inputEl.maxLength = 32;
+        Object.assign(inputEl.style, {
             background: '#0a0a1a', color: '#00ffff',
             border: '2px solid #00ffff', padding: '8px 14px',
-            fontFamily: 'monospace', fontSize: `${Math.round(16 * scaleX)}px`,
-            outline: 'none', textAlign: 'center',
-            width: `${Math.round(200 * scaleX)}px`, zIndex: 10
+            fontFamily: 'monospace', fontSize: '16px',
+            outline: 'none', textAlign: 'center', width: '200px'
         });
-        document.body.appendChild(input);
-        input.focus();
+        const input = this.add.dom(WIDTH / 2, HEIGHT / 2 + 20, inputEl);
+        inputEl.focus();
 
         const statusText = this.add.text(WIDTH / 2, HEIGHT / 2 + 42, '', {
             fontSize: '13px', color: '#aaaaaa', fontFamily: 'monospace'
@@ -221,7 +210,7 @@ class GameScene extends Phaser.Scene {
             submitted = true;
             btn.setVisible(false);
             btnText.setVisible(false);
-            input.style.display = 'none';
+            input.setVisible(false);
             statusText.setText('Submitting...');
             try {
                 await fetch(`${API_URL}/leaderboard`, {
@@ -231,19 +220,19 @@ class GameScene extends Phaser.Scene {
                 });
                 const res = await fetch(`${API_URL}/leaderboard`);
                 const top = await res.json();
-                input.remove();
+                input.destroy();
                 statusText.setVisible(false);
                 scoreText.setVisible(false);
                 this.showLeaderboard(top);
             } catch (e) {
                 statusText.setText('Could not save score.');
-                input.remove();
+                input.destroy();
                 this.showRestartBtn();
             }
         };
 
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') submitScore(input.value);
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitScore(inputEl.value);
         });
 
         const btn = this.add.rectangle(WIDTH / 2, HEIGHT / 2 + 68, 160, 40, 0x00ffff)
@@ -253,7 +242,7 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0.5);
         btn.on('pointerover', () => btn.setFillStyle(0x00dddd));
         btn.on('pointerout', () => btn.setFillStyle(0x00ffff));
-        btn.on('pointerdown', () => submitScore(input.value));
+        btn.on('pointerdown', () => submitScore(inputEl.value));
     }
 
     showLeaderboard(top) {
@@ -292,6 +281,7 @@ new Phaser.Game({
     height: HEIGHT,
     backgroundColor: '#0a0a1a',
     scene: GameScene,
+    dom: { createContainer: true },
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
