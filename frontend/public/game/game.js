@@ -172,48 +172,100 @@ class GameScene extends Phaser.Scene {
         this.dead = true;
         this.player.setFillStyle(0xff0066).setAlpha(1);
 
-        // Dark overlay
+        const params = new URLSearchParams(window.location.search);
+        const API_URL = params.get('api') || 'http://localhost:8000';
+
         this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x000000, 0.78);
 
-        // Title
         this.add.text(WIDTH / 2, HEIGHT / 2 - 95, 'GAME OVER', {
-            fontSize: '54px',
-            color: '#ff0066',
-            fontFamily: 'monospace',
-            fontStyle: 'bold',
-            stroke: '#ff0066',
-            strokeThickness: 1
+            fontSize: '54px', color: '#ff0066', fontFamily: 'monospace',
+            fontStyle: 'bold', stroke: '#ff0066', strokeThickness: 1
         }).setOrigin(0.5);
 
-        // Score
-        this.add.text(WIDTH / 2, HEIGHT / 2 - 22, 'SCORE: ' + this.score, {
-            fontSize: '30px',
-            color: '#00ffff',
-            fontFamily: 'monospace'
+        this.add.text(WIDTH / 2, HEIGHT / 2 - 38, 'SCORE: ' + this.score, {
+            fontSize: '30px', color: '#00ffff', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
-        // Restart button
-        const btn = this.add.rectangle(WIDTH / 2, HEIGHT / 2 + 58, 230, 52, 0x00ffff)
-            .setStrokeStyle(2, 0xffffff)
-            .setInteractive();
+        // DOM name input
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Enter your name';
+        input.maxLength = 32;
+        Object.assign(input.style, {
+            position: 'absolute', left: '50%', top: '54%',
+            transform: 'translateX(-50%)',
+            background: '#0a0a1a', color: '#00ffff',
+            border: '2px solid #00ffff', padding: '8px 14px',
+            fontFamily: 'monospace', fontSize: '16px',
+            outline: 'none', textAlign: 'center', width: '200px', zIndex: 10
+        });
+        document.body.appendChild(input);
+        input.focus();
 
-        this.add.text(WIDTH / 2, HEIGHT / 2 + 58, '[ PLAY AGAIN ]', {
-            fontSize: '20px',
-            color: '#0a0a1a',
-            fontFamily: 'monospace',
-            fontStyle: 'bold'
+        const statusText = this.add.text(WIDTH / 2, HEIGHT / 2 + 42, '', {
+            fontSize: '13px', color: '#aaaaaa', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
+        const submitScore = async (name) => {
+            if (!name.trim()) return;
+            input.disabled = true;
+            statusText.setText('Submitting...');
+            try {
+                await fetch(`${API_URL}/leaderboard`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name.trim(), score: this.score })
+                });
+                const res = await fetch(`${API_URL}/leaderboard`);
+                const top = await res.json();
+                input.remove();
+                this.showLeaderboard(top);
+            } catch (e) {
+                statusText.setText('Could not save score.');
+                input.remove();
+                this.showRestartBtn();
+            }
+        };
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitScore(input.value);
+        });
+
+        const btn = this.add.rectangle(WIDTH / 2, HEIGHT / 2 + 68, 160, 40, 0x00ffff)
+            .setStrokeStyle(2, 0xffffff).setInteractive();
+        this.add.text(WIDTH / 2, HEIGHT / 2 + 68, '[ SUBMIT ]', {
+            fontSize: '16px', color: '#0a0a1a', fontFamily: 'monospace', fontStyle: 'bold'
+        }).setOrigin(0.5);
+        btn.on('pointerover', () => btn.setFillStyle(0x00dddd));
+        btn.on('pointerout', () => btn.setFillStyle(0x00ffff));
+        btn.on('pointerdown', () => submitScore(input.value));
+    }
+
+    showLeaderboard(top) {
+        this.add.text(WIDTH / 2, HEIGHT / 2 - 38, 'TOP SCORES', {
+            fontSize: '20px', color: '#ff6699', fontFamily: 'monospace', fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        top.forEach((entry, i) => {
+            const y = HEIGHT / 2 - 12 + i * 22;
+            this.add.text(WIDTH / 2, y,
+                `${String(i + 1).padStart(2)}. ${entry.name.padEnd(14)} ${entry.score}`, {
+                fontSize: '14px', color: i === 0 ? '#ffff00' : '#00ffff', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+        });
+
+        this.showRestartBtn();
+    }
+
+    showRestartBtn() {
+        const btn = this.add.rectangle(WIDTH / 2, HEIGHT - 44, 200, 42, 0x00ffff)
+            .setStrokeStyle(2, 0xffffff).setInteractive();
+        this.add.text(WIDTH / 2, HEIGHT - 44, '[ PLAY AGAIN ]', {
+            fontSize: '16px', color: '#0a0a1a', fontFamily: 'monospace', fontStyle: 'bold'
+        }).setOrigin(0.5);
         btn.on('pointerover', () => btn.setFillStyle(0x00dddd));
         btn.on('pointerout', () => btn.setFillStyle(0x00ffff));
         btn.on('pointerdown', () => this.scene.restart());
-
-        this.add.text(WIDTH / 2, HEIGHT / 2 + 106, 'or press  SPACE / ENTER', {
-            fontSize: '13px',
-            color: '#ffffff',
-            fontFamily: 'monospace'
-        }).setOrigin(0.5).setAlpha(0.45);
-
         this.input.keyboard.once('keydown-SPACE', () => this.scene.restart());
         this.input.keyboard.once('keydown-ENTER', () => this.scene.restart());
     }

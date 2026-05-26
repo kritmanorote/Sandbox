@@ -7,15 +7,22 @@ import './App.css'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 function App() {
-  const [count, setCount] = useState(0)
   const [backendStatus, setBackendStatus] = useState('checking...')
+  const [leaderboard, setLeaderboard] = useState([])
 
   useEffect(() => {
     fetch(`${API_URL}/health`)
       .then((res) => res.json())
       .then((data) => setBackendStatus(`Backend: ${data.status} | DB: ${data.db ?? 'not connected'}`))
       .catch(() => setBackendStatus('Backend: unreachable'))
+
+    fetch(`${API_URL}/leaderboard`)
+      .then((res) => res.json())
+      .then(setLeaderboard)
+      .catch(() => {})
   }, [])
+
+  const gameUrl = `/game/index.html?api=${encodeURIComponent(API_URL)}`
 
   return (
     <>
@@ -26,20 +33,12 @@ function App() {
           <img src={viteLogo} className="vite" alt="Vite logo" />
         </div>
         <div>
-          <h1>It works!</h1>
-          <p>Frontend is up and running.</p>
+          <h1>Neon Dash</h1>
           <p><strong>{backendStatus}</strong></p>
-          <a href="/game/index.html" target="_blank" rel="noopener noreferrer">
+          <a href={gameUrl} target="_blank" rel="noopener noreferrer">
             <button type="button" className="counter">Play Neon Dash</button>
           </a>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
       </section>
 
       <div className="ticks"></div>
@@ -49,22 +48,19 @@ function App() {
           <svg className="icon" role="presentation" aria-hidden="true">
             <use href="/icons.svg#documentation-icon"></use>
           </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          <h2>Leaderboard</h2>
+          <p>Top 10 scores</p>
+          {leaderboard.length === 0 ? (
+            <p style={{ color: '#aaa', marginTop: '12px', fontFamily: 'monospace' }}>No scores yet. Be the first!</p>
+          ) : (
+            <ol style={{ marginTop: '12px', paddingLeft: '1.2em' }}>
+              {leaderboard.map((entry, i) => (
+                <li key={i} style={{ fontFamily: 'monospace', color: i === 0 ? '#ffff00' : '#00ffff', marginBottom: '4px' }}>
+                  {entry.name} — {entry.score}
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
         <div id="social">
           <svg className="icon" role="presentation" aria-hidden="true">
@@ -75,11 +71,7 @@ function App() {
           <ul>
             <li>
               <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
+                <svg className="button-icon" role="presentation" aria-hidden="true">
                   <use href="/icons.svg#github-icon"></use>
                 </svg>
                 GitHub
@@ -87,38 +79,10 @@ function App() {
             </li>
             <li>
               <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
+                <svg className="button-icon" role="presentation" aria-hidden="true">
                   <use href="/icons.svg#discord-icon"></use>
                 </svg>
                 Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
               </a>
             </li>
           </ul>
