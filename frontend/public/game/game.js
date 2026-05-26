@@ -190,21 +190,44 @@ class GameScene extends Phaser.Scene {
             fontSize: '30px', color: '#00ffff', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
-        // DOM name input via Phaser DOM — auto-aligns with canvas scale
+        // Native HTML input positioned over the canvas using its actual bounds
         const inputEl = document.createElement('input');
         inputEl.type = 'text';
         inputEl.placeholder = 'Enter your name';
         inputEl.maxLength = 32;
-        Object.assign(inputEl.style, {
-            background: '#0a0a1a', color: '#00ffff',
-            border: '2px solid #00ffff', padding: '8px 14px',
-            fontFamily: 'monospace', fontSize: '16px',
-            outline: 'none', textAlign: 'center', width: '200px'
-        });
-        const input = this.add.dom(WIDTH / 2, HEIGHT / 2 + 20, inputEl);
+
+        const placeInput = () => {
+            const rect = this.sys.game.canvas.getBoundingClientRect();
+            const sx = rect.width / WIDTH;
+            const sy = rect.height / HEIGHT;
+            const w = 200 * sx;
+            Object.assign(inputEl.style, {
+                position: 'fixed',
+                left:  (rect.left + WIDTH / 2 * sx - w / 2) + 'px',
+                top:   (rect.top  + (HEIGHT / 2 + 10) * sy)  + 'px',
+                width: w + 'px',
+                background: '#0a0a1a', color: '#00ffff',
+                border: '2px solid #00ffff',
+                padding: '8px 14px',
+                fontFamily: 'monospace',
+                fontSize: Math.max(11, Math.round(16 * Math.min(sx, sy))) + 'px',
+                outline: 'none', textAlign: 'center',
+                zIndex: '1000', boxSizing: 'border-box',
+            });
+        };
+        placeInput();
+        window.addEventListener('resize', placeInput);
+        document.body.appendChild(inputEl);
         inputEl.focus();
 
-        const statusText = this.add.text(WIDTH / 2, HEIGHT / 2 + 42, '', {
+        const removeInput = () => {
+            window.removeEventListener('resize', placeInput);
+            if (document.body.contains(inputEl)) document.body.removeChild(inputEl);
+        };
+        this.events.once('shutdown', removeInput);
+        this.events.once('destroy',  removeInput);
+
+        const statusText = this.add.text(WIDTH / 2, HEIGHT / 2 + 52, '', {
             fontSize: '13px', color: '#aaaaaa', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
@@ -214,7 +237,7 @@ class GameScene extends Phaser.Scene {
             submitted = true;
             btn.setVisible(false);
             btnText.setVisible(false);
-            input.setVisible(false);
+            removeInput();
             statusText.setText('Submitting...');
             try {
                 await fetch(`${API_URL}/leaderboard`, {
@@ -224,13 +247,11 @@ class GameScene extends Phaser.Scene {
                 });
                 const res = await fetch(`${API_URL}/leaderboard`);
                 const top = await res.json();
-                input.destroy();
                 statusText.setVisible(false);
                 scoreText.setVisible(false);
                 this.showLeaderboard(top);
             } catch (e) {
                 statusText.setText('Could not save score.');
-                input.destroy();
                 this.showRestartBtn();
             }
         };
@@ -239,9 +260,9 @@ class GameScene extends Phaser.Scene {
             if (e.key === 'Enter') submitScore(inputEl.value);
         });
 
-        const btn = this.add.rectangle(WIDTH / 2, HEIGHT / 2 + 68, 160, 40, 0x00ffff)
+        const btn = this.add.rectangle(WIDTH / 2, HEIGHT / 2 + 80, 160, 40, 0x00ffff)
             .setStrokeStyle(2, 0xffffff).setInteractive();
-        const btnText = this.add.text(WIDTH / 2, HEIGHT / 2 + 68, '[ SUBMIT ]', {
+        const btnText = this.add.text(WIDTH / 2, HEIGHT / 2 + 80, '[ SUBMIT ]', {
             fontSize: '16px', color: '#0a0a1a', fontFamily: 'monospace', fontStyle: 'bold'
         }).setOrigin(0.5);
         btn.on('pointerover', () => btn.setFillStyle(0x00dddd));
@@ -285,7 +306,6 @@ new Phaser.Game({
     height: HEIGHT,
     backgroundColor: '#0a0a1a',
     scene: GameScene,
-    dom: { createContainer: true },
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
