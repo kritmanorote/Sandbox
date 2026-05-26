@@ -49,13 +49,19 @@ function App() {
             <use href="/icons.svg#documentation-icon"></use>
           </svg>
           <h2>Leaderboard</h2>
-          <p>Top 10 scores</p>
+          <p>Top 5 scores</p>
           {leaderboard.length === 0 ? (
-            <p style={{ color: '#aaa', marginTop: '12px', fontFamily: 'monospace' }}>No scores yet. Be the first!</p>
+            <p style={{ color: '#888', marginTop: '12px', fontFamily: 'monospace' }}>No scores yet. Be the first!</p>
           ) : (
             <ol style={{ marginTop: '12px', paddingLeft: '1.2em' }}>
               {leaderboard.map((entry, i) => (
-                <li key={i} style={{ fontFamily: 'monospace', color: i === 0 ? '#ffff00' : '#00ffff', marginBottom: '4px' }}>
+                <li key={i} style={{
+                  fontFamily: 'monospace',
+                  fontWeight: i === 0 ? 'bold' : 'normal',
+                  color: i === 0 ? '#c026d3' : '#0891b2',
+                  marginBottom: '6px',
+                  fontSize: i === 0 ? '1.05em' : '1em'
+                }}>
                   {entry.name} — {entry.score}
                 </li>
               ))}
