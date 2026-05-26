@@ -186,18 +186,27 @@ class GameScene extends Phaser.Scene {
             fontSize: '30px', color: '#00ffff', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
-        // DOM name input
+        // DOM name input — positioned relative to the Phaser canvas
+        const canvas = this.sys.game.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = rect.width / WIDTH;
+        const scaleY = rect.height / HEIGHT;
+        const inputX = rect.left + (WIDTH / 2) * scaleX;
+        const inputY = rect.top + (HEIGHT / 2 + 20) * scaleY;
+
         const input = document.createElement('input');
         input.type = 'text';
         input.placeholder = 'Enter your name';
         input.maxLength = 32;
         Object.assign(input.style, {
-            position: 'absolute', left: '50%', top: '54%',
+            position: 'fixed',
+            left: `${inputX}px`, top: `${inputY}px`,
             transform: 'translateX(-50%)',
             background: '#0a0a1a', color: '#00ffff',
             border: '2px solid #00ffff', padding: '8px 14px',
-            fontFamily: 'monospace', fontSize: '16px',
-            outline: 'none', textAlign: 'center', width: '200px', zIndex: 10
+            fontFamily: 'monospace', fontSize: `${Math.round(16 * scaleX)}px`,
+            outline: 'none', textAlign: 'center',
+            width: `${Math.round(200 * scaleX)}px`, zIndex: 10
         });
         document.body.appendChild(input);
         input.focus();
