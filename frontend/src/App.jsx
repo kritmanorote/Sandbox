@@ -38,6 +38,9 @@ function App() {
           <a href={gameUrl} target="_blank" rel="noopener noreferrer">
             <button type="button" className="counter">Play Neon Dash</button>
           </a>
+          <a href="/pacman/index.html" target="_blank" rel="noopener noreferrer">
+            <button type="button" className="counter">Play Pacman</button>
+          </a>
         </div>
       </section>
 
