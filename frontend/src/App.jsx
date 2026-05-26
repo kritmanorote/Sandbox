@@ -29,6 +29,9 @@ function App() {
           <h1>It works!</h1>
           <p>Frontend is up and running.</p>
           <p><strong>{backendStatus}</strong></p>
+          <a href="/game/index.html" target="_blank" rel="noopener noreferrer">
+            <button type="button" className="counter">Play Neon Dash</button>
+          </a>
         </div>
         <button
           type="button"
