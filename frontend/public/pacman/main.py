@@ -490,7 +490,8 @@ class Game:
 
 
 async def main():
-    pygame.init()
+    pygame.display.init()
+    pygame.font.init()
     await Game().run()
 
 
