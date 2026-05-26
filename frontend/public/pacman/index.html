@@ -121,6 +121,8 @@ class Pacman {
     update(maze) {
         const cx = this.col * TILE + TILE / 2;
         const cy = this.row * TILE + TILE / 2;
+
+        // At/near cell center: try to apply the queued direction
         if (Math.abs(this.px - cx) <= PACMAN_SPEED && Math.abs(this.py - cy) <= PACMAN_SPEED) {
             const [ndc, ndr] = this.nextDir;
             const nc = this.col + ndc, nr = this.row + ndr;
@@ -129,16 +131,34 @@ class Pacman {
                 this.dir = [ndc, ndr];
             }
         }
+
         const [dc, dr] = this.dir;
         if (dc !== 0 || dr !== 0) {
-            const npx = this.px + dc * PACMAN_SPEED, npy = this.py + dr * PACMAN_SPEED;
+            // Look one tile ahead in the current direction
+            const nextCol = this.col + dc, nextRow = this.row + dr;
+            const wallAhead =
+                nextCol < 0 || nextCol >= COLS || nextRow < 0 || nextRow >= ROWS ||
+                maze[nextRow][nextCol] === WALL;
+
+            let npx = this.px + dc * PACMAN_SPEED;
+            let npy = this.py + dr * PACMAN_SPEED;
+
+            if (wallAhead) {
+                // Stop at cell center — never overshoot toward the wall
+                if (dc > 0) npx = Math.min(npx, cx);
+                else if (dc < 0) npx = Math.max(npx, cx);
+                if (dr > 0) npy = Math.min(npy, cy);
+                else if (dr < 0) npy = Math.max(npy, cy);
+            }
+
             const nc = Math.floor(npx / TILE), nr = Math.floor(npy / TILE);
             if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && maze[nr][nc] !== WALL) {
                 this.px = npx; this.py = npy;
             } else {
-                this.px = cx; this.py = cy;
+                this.px = cx; this.py = cy; // safety fallback
             }
         }
+
         if (this.px < 0) this.px = SCREEN_W - 1;
         if (this.px >= SCREEN_W) this.px = 0;
         this.col = Math.max(0, Math.min(COLS - 1, Math.floor(this.px / TILE)));
