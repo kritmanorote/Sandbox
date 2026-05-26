@@ -182,7 +182,7 @@ class GameScene extends Phaser.Scene {
             fontStyle: 'bold', stroke: '#ff0066', strokeThickness: 1
         }).setOrigin(0.5);
 
-        this.add.text(WIDTH / 2, HEIGHT / 2 - 38, 'SCORE: ' + this.score, {
+        const scoreText = this.add.text(WIDTH / 2, HEIGHT / 2 - 38, 'SCORE: ' + this.score, {
             fontSize: '30px', color: '#00ffff', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
@@ -224,6 +224,7 @@ class GameScene extends Phaser.Scene {
                 const top = await res.json();
                 input.remove();
                 statusText.setVisible(false);
+                scoreText.setVisible(false);
                 this.showLeaderboard(top);
             } catch (e) {
                 statusText.setText('Could not save score.');
