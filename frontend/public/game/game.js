@@ -2,6 +2,11 @@ const WIDTH = 800;
 const HEIGHT = 400;
 const GROUND_Y = 340;
 
+// Warm up the backend silently on page load
+const params = new URLSearchParams(window.location.search);
+const BACKEND_URL = params.get('api') || 'http://localhost:8000';
+fetch(`${BACKEND_URL}/health`).catch(() => {});
+
 class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
@@ -172,8 +177,7 @@ class GameScene extends Phaser.Scene {
         this.dead = true;
         this.player.setFillStyle(0xff0066).setAlpha(1);
 
-        const params = new URLSearchParams(window.location.search);
-        const API_URL = params.get('api') || 'http://localhost:8000';
+        const API_URL = BACKEND_URL;
 
         this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x000000, 0.78);
 
