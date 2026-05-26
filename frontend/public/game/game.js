@@ -212,7 +212,7 @@ class GameScene extends Phaser.Scene {
             submitted = true;
             btn.setVisible(false);
             btnText.setVisible(false);
-            input.disabled = true;
+            input.style.display = 'none';
             statusText.setText('Submitting...');
             try {
                 await fetch(`${API_URL}/leaderboard`, {
