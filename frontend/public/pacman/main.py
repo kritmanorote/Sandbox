@@ -490,6 +490,8 @@ class Game:
 
 
 async def main():
+    import os
+    os.environ['SDL_AUDIODRIVER'] = 'dummy'
     pygame.display.init()
     pygame.font.init()
     await Game().run()
