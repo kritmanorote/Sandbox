@@ -274,10 +274,19 @@ class Ghost {
             if (opts.length) this.dir = opts[Math.floor(Math.random() * opts.length)];
             return;
         }
+        // Ghost house bounds: rows 11-14, cols 16-23
+        const inHouse = this.row >= 11 && this.row <= 14 && this.col >= 16 && this.col <= 23;
+
         let target;
-        if (this.mode === 'eaten') target = [Math.floor(COLS/2), Math.floor(ROWS/2)];
-        else if (this.mode === 'scatter') target = this.scatterTarget;
-        else {
+        if (this.mode === 'eaten') {
+            // Return to house center; once close enough update() switches mode to scatter
+            target = [Math.floor(COLS/2), Math.floor(ROWS/2)];
+        } else if (inHouse) {
+            // Always aim for the tile just above the exit so ghost escapes
+            target = [19, 9];
+        } else if (this.mode === 'scatter') {
+            target = this.scatterTarget;
+        } else {
             target = [pacman.col, pacman.row];
             if (this.color === C.pink) {
                 const [dc, dr] = pacman.dir;
