@@ -88,7 +88,7 @@ def get_leaderboard():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "SELECT name, score, created_at FROM leaderboard ORDER BY score DESC LIMIT 10"
+        "SELECT name, score, created_at FROM leaderboard ORDER BY score DESC LIMIT 5"
     )
     rows = cur.fetchall()
     cur.close()
