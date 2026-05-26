@@ -206,8 +206,11 @@ class GameScene extends Phaser.Scene {
             fontSize: '13px', color: '#aaaaaa', fontFamily: 'monospace'
         }).setOrigin(0.5);
 
+        let submitted = false;
         const submitScore = async (name) => {
-            if (!name.trim()) return;
+            if (!name.trim() || submitted) return;
+            submitted = true;
+            btn.disableInteractive().setFillStyle(0x336666);
             input.disabled = true;
             statusText.setText('Submitting...');
             try {
