@@ -210,7 +210,8 @@ class GameScene extends Phaser.Scene {
         const submitScore = async (name) => {
             if (!name.trim() || submitted) return;
             submitted = true;
-            btn.disableInteractive().setFillStyle(0x336666);
+            btn.setVisible(false);
+            btnText.setVisible(false);
             input.disabled = true;
             statusText.setText('Submitting...');
             try {
@@ -236,7 +237,7 @@ class GameScene extends Phaser.Scene {
 
         const btn = this.add.rectangle(WIDTH / 2, HEIGHT / 2 + 68, 160, 40, 0x00ffff)
             .setStrokeStyle(2, 0xffffff).setInteractive();
-        this.add.text(WIDTH / 2, HEIGHT / 2 + 68, '[ SUBMIT ]', {
+        const btnText = this.add.text(WIDTH / 2, HEIGHT / 2 + 68, '[ SUBMIT ]', {
             fontSize: '16px', color: '#0a0a1a', fontFamily: 'monospace', fontStyle: 'bold'
         }).setOrigin(0.5);
         btn.on('pointerover', () => btn.setFillStyle(0x00dddd));
