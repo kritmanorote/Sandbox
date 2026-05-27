@@ -53,6 +53,11 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
+    system_instruction: str = ""
+
+class EmbedRequest(BaseModel):
+    texts: List[str]
+    task_type: str = "RETRIEVAL_DOCUMENT"
 
 
 @app.get("/")
@@ -93,13 +98,33 @@ def submit_score(entry: ScoreEntry):
     return {"id": new_id, "name": entry.name, "score": entry.score}
 
 
+@app.post("/embed")
+def embed(req: EmbedRequest):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    genai.configure(api_key=api_key)
+    embeddings = []
+    for text in req.texts:
+        result = genai.embed_content(
+            model="models/gemini-embedding-001",
+            content=text,
+            task_type=req.task_type
+        )
+        embeddings.append(result["embedding"])
+    return {"embeddings": embeddings}
+
+
 @app.post("/chat")
 def chat(req: ChatRequest):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel(
+        "gemini-2.5-flash",
+        system_instruction=req.system_instruction or None
+    )
     history = [
         {"role": m.role, "parts": [m.content]}
         for m in req.messages[:-1]

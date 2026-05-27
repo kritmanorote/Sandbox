@@ -35,7 +35,6 @@
   }
 
   header a {
-    margin-left: auto;
     color: #888;
     text-decoration: none;
     font-size: 0.8rem;
@@ -43,6 +42,27 @@
   }
 
   header a:hover { color: #00ffff; }
+
+  #mode-toggle {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid #444;
+    color: #888;
+    font-family: 'Courier New', monospace;
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  #mode-toggle.restricted {
+    border-color: #a855f7;
+    color: #a855f7;
+    box-shadow: 0 0 8px #a855f733;
+  }
 
   #messages {
     flex: 1;
@@ -91,6 +111,70 @@
     font-size: 0.8rem;
     padding: 4px 0;
     animation: blink 1s step-start infinite;
+  }
+
+  /* RAG context pill */
+  .rag-context {
+    align-self: flex-start;
+    max-width: 80%;
+    font-size: 0.75rem;
+    color: #a855f7;
+    border: 1px solid #a855f744;
+    border-radius: 8px;
+  }
+
+  .rag-toggle {
+    padding: 5px 12px;
+    cursor: pointer;
+    user-select: none;
+    letter-spacing: 1px;
+  }
+
+  .rag-toggle::before { content: '▶ '; font-size: 0.6rem; }
+  .rag-toggle.open::before { content: '▼ '; }
+
+  .rag-chunks {
+    display: none;
+    padding: 6px 12px 8px;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid #a855f722;
+  }
+
+  .rag-chunks.open { display: flex; }
+
+  .rag-chunk {
+    background: #1a0a2a;
+    border-left: 2px solid #a855f7;
+    padding: 4px 8px;
+    color: #c4a0e8;
+    border-radius: 0 4px 4px 0;
+    white-space: pre-wrap;
+  }
+
+  .vec-section {
+    margin-top: 6px;
+    font-size: 0.68rem;
+    color: #7c3aed;
+  }
+
+  .vec-preview {
+    font-family: 'Courier New', monospace;
+    color: #9f7aea;
+    margin: 2px 0;
+  }
+
+  .sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 24px;
+    margin-top: 4px;
+  }
+
+  .spark-bar {
+    width: 3px;
+    border-radius: 1px 1px 0 0;
   }
 
   @keyframes blink { 50% { opacity: 0; } }
@@ -156,6 +240,7 @@
 
 <header>
   <h1>// NEON CHAT</h1>
+  <button id="mode-toggle">FREE MODE</button>
   <a href="/">← Back</a>
 </header>
 
@@ -168,6 +253,67 @@
 </div>
 
 <script>
+  // ─── Knowledge base ────────────────────────────────────────────────────────
+  const KNOWLEDGE_BASE = [
+    "Neon Dash is a side-scrolling obstacle game built with Phaser 3. The player controls a neon character that must dodge incoming obstacles. Scores are saved to a leaderboard via the FastAPI backend.",
+    "Pacman is a maze game rewritten from scratch in JavaScript Canvas (no libraries). It has four ghosts: Red, Pink, Cyan, and Orange, each with unique scatter corner targets.",
+    "Ghosts in Pacman have four AI modes: scatter (head to corner), chase (target Pacman), frightened (turn blue, move randomly after Pacman eats a power pellet), and eaten (return to ghost house).",
+    "The leaderboard stores top scores in a Neon PostgreSQL database. The query groups by player name and returns MAX(score) per player, showing only the top 5.",
+    "The backend is built with FastAPI and deployed on Render (free tier). It handles leaderboard reads/writes and proxies AI requests to the Gemini API to keep the API key server-side.",
+    "The frontend is built with React and Vite, deployed as a static site on Render. Game pages (Neon Dash, Pacman, Chat) are standalone HTML files in the public folder.",
+    "Mobile controls for Pacman include a D-pad overlay (visible only on touch devices via CSS pointer:coarse media query) and swipe gesture detection on the canvas element.",
+    "The Neon Chat page is a standalone HTML file. It keeps conversation history in a JS array on the client and sends the full history to the backend on every message for multi-turn context.",
+    "The project uses a Render Blueprint (render.yaml) to define both the web service (backend) and static site (frontend) so they can be deployed together from one GitHub repo.",
+  ];
+
+  // ─── Embeddings ────────────────────────────────────────────────────────────
+  function cosineSimilarity(a, b) {
+    let dot = 0, magA = 0, magB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot  += a[i] * b[i];
+      magA += a[i] * a[i];
+      magB += b[i] * b[i];
+    }
+    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+  }
+
+  async function fetchEmbeddings(texts, taskType = 'RETRIEVAL_DOCUMENT') {
+    const res = await fetch(`${API_URL}/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texts, task_type: taskType }),
+    });
+    const data = await res.json();
+    return data.embeddings;
+  }
+
+  // Pre-computed embeddings for all chunks — loaded once at startup.
+  let chunkEmbeddings = null;
+
+  async function initEmbeddings() {
+    setInputState('loading');
+    try {
+      chunkEmbeddings = await fetchEmbeddings(KNOWLEDGE_BASE, 'RETRIEVAL_DOCUMENT');
+      setInputState('ready');
+    } catch (e) {
+      setInputState('ready'); // degrade gracefully — chat still works without RAG
+      console.warn('Embedding init failed:', e);
+    }
+  }
+
+  // ─── Retrieval ─────────────────────────────────────────────────────────────
+  async function retrieve(query, topK = 2) {
+    if (!chunkEmbeddings) return [];
+    const [queryVec] = await fetchEmbeddings([query], 'RETRIEVAL_QUERY');
+    return KNOWLEDGE_BASE
+      .map((chunk, i) => ({ chunk, score: cosineSimilarity(queryVec, chunkEmbeddings[i]), vector: chunkEmbeddings[i] }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK)
+      .filter(r => r.score > 0.5)
+      .map(r => ({ ...r, queryVec }));
+  }
+
+  // ─── UI helpers ────────────────────────────────────────────────────────────
   const params = new URLSearchParams(location.search);
   const API_URL = params.get('api') || 'http://localhost:8000';
 
@@ -175,13 +321,115 @@
   const inputEl = document.getElementById('user-input');
   const sendBtn = document.getElementById('send-btn');
   const errorBanner = document.getElementById('error-banner');
+  const modeToggle = document.getElementById('mode-toggle');
+
+  const SYSTEM_INSTRUCTION = 'Answer ONLY using the provided context. If the answer is not in the context, say "I don\'t have that information in my knowledge base."';
+
+  let restricted = false;
+  modeToggle.addEventListener('click', () => {
+    restricted = !restricted;
+    modeToggle.textContent = restricted ? 'RAG ONLY' : 'FREE MODE';
+    modeToggle.classList.toggle('restricted', restricted);
+  });
 
   const history = [];
+
+  function setInputState(state) {
+    if (state === 'loading') {
+      inputEl.placeholder = 'Loading embeddings...';
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+    } else {
+      inputEl.placeholder = 'Ask anything...';
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
 
   function showError(msg) {
     errorBanner.textContent = msg;
     errorBanner.style.display = 'block';
     setTimeout(() => { errorBanner.style.display = 'none'; }, 5000);
+  }
+
+  function makeSparkline(vec) {
+    // Sample 48 evenly-spaced values from the full vector
+    const n = 48;
+    const step = Math.floor(vec.length / n);
+    const samples = Array.from({ length: n }, (_, i) => vec[i * step]);
+    const max = Math.max(...samples.map(Math.abs));
+    const el = document.createElement('div');
+    el.className = 'sparkline';
+    samples.forEach(v => {
+      const bar = document.createElement('div');
+      bar.className = 'spark-bar';
+      const pct = Math.max(2, Math.round((Math.abs(v) / max) * 24));
+      bar.style.height = pct + 'px';
+      bar.style.background = v >= 0 ? '#a855f7' : '#ec4899';
+      el.appendChild(bar);
+    });
+    return el;
+  }
+
+  function appendRagContext(results) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'rag-context';
+
+    const toggle = document.createElement('div');
+    toggle.className = 'rag-toggle';
+    toggle.textContent = `RAG: ${results.length} chunk${results.length > 1 ? 's' : ''} retrieved`;
+
+    const chunkList = document.createElement('div');
+    chunkList.className = 'rag-chunks';
+    results.forEach(({ chunk, score, vector, queryVec }) => {
+      const div = document.createElement('div');
+      div.className = 'rag-chunk';
+
+      const scoreTag = document.createElement('span');
+      scoreTag.style.cssText = 'color:#7c3aed;margin-right:8px;font-size:0.7rem;';
+      scoreTag.textContent = `[${score.toFixed(3)}]`;
+      div.appendChild(scoreTag);
+      div.appendChild(document.createTextNode(chunk));
+
+      // Vector section
+      const vecSection = document.createElement('div');
+      vecSection.className = 'vec-section';
+
+      const dim = document.createElement('div');
+      dim.textContent = `chunk vector — ${vector.length} dims`;
+      vecSection.appendChild(dim);
+
+      const preview = document.createElement('div');
+      preview.className = 'vec-preview';
+      preview.textContent = '[' + vector.slice(0, 6).map(v => v.toFixed(4)).join(', ') + ', ...]';
+      vecSection.appendChild(preview);
+      vecSection.appendChild(makeSparkline(vector));
+
+      const qdim = document.createElement('div');
+      qdim.style.marginTop = '6px';
+      qdim.textContent = `query vector — ${queryVec.length} dims`;
+      vecSection.appendChild(qdim);
+
+      const qpreview = document.createElement('div');
+      qpreview.className = 'vec-preview';
+      qpreview.textContent = '[' + queryVec.slice(0, 6).map(v => v.toFixed(4)).join(', ') + ', ...]';
+      vecSection.appendChild(qpreview);
+      vecSection.appendChild(makeSparkline(queryVec));
+
+      div.appendChild(vecSection);
+      chunkList.appendChild(div);
+    });
+
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('open');
+      chunkList.classList.toggle('open');
+    });
+
+    wrapper.appendChild(toggle);
+    wrapper.appendChild(chunkList);
+    messagesEl.appendChild(wrapper);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   function appendMsg(role, content) {
@@ -210,6 +458,7 @@
     return div;
   }
 
+  // ─── Send ──────────────────────────────────────────────────────────────────
   async function sendMessage() {
     const text = inputEl.value.trim();
     if (!text) return;
@@ -218,8 +467,20 @@
     inputEl.style.height = 'auto';
     sendBtn.disabled = true;
 
-    history.push({ role: 'user', content: text });
     appendMsg('user', text);
+
+    // Retrieve relevant chunks for this query (embedding-based)
+    const results = await retrieve(text);
+
+    // Augment the message with retrieved context before sending to Gemini
+    let augmented = text;
+    if (results.length > 0) {
+      augmented = `[Context from knowledge base:\n${results.map((r, i) => `${i + 1}. ${r.chunk}`).join('\n')}]\n\nUser question: ${text}`;
+      appendRagContext(results);
+    }
+
+    // Store original text in history so future turns stay readable
+    history.push({ role: 'user', content: augmented });
 
     const thinking = appendThinking();
 
@@ -227,7 +488,10 @@
       const res = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({
+          messages: history,
+          system_instruction: restricted ? SYSTEM_INSTRUCTION : '',
+        }),
       });
 
       if (!res.ok) {
@@ -262,6 +526,8 @@
     inputEl.style.height = 'auto';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
   });
+
+  initEmbeddings();
 </script>
 </body>
 </html>
