@@ -22,7 +22,7 @@ function App() {
       .catch(() => {})
   }, [])
 
-  const gameUrl = `/game/index.html?api=${encodeURIComponent(API_URL)}`
+  const gameUrl = `/neonDash/index.html?api=${encodeURIComponent(API_URL)}`
 
   return (
     <>
