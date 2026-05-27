@@ -267,14 +267,8 @@
   ];
 
   // ─── Embeddings ────────────────────────────────────────────────────────────
-  function cosineSimilarity(a, b) {
-    let dot = 0, magA = 0, magB = 0;
-    for (let i = 0; i < a.length; i++) {
-      dot  += a[i] * b[i];
-      magA += a[i] * a[i];
-      magB += b[i] * b[i];
-    }
-    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+  function dotProduct(a, b) {
+    return a.reduce((sum, ai, i) => sum + ai * b[i], 0);
   }
 
   async function fetchEmbeddings(texts, taskType = 'RETRIEVAL_DOCUMENT') {
@@ -296,8 +290,8 @@
       chunkEmbeddings = await fetchEmbeddings(KNOWLEDGE_BASE, 'RETRIEVAL_DOCUMENT');
       setInputState('ready');
     } catch (e) {
-      setInputState('ready'); // degrade gracefully — chat still works without RAG
-      console.warn('Embedding init failed:', e);
+      setInputState('ready');
+      showError(`Embeddings failed to load: ${e.message}. RAG disabled.`);
     }
   }
 
@@ -306,7 +300,7 @@
     if (!chunkEmbeddings) return [];
     const [queryVec] = await fetchEmbeddings([query], 'RETRIEVAL_QUERY');
     return KNOWLEDGE_BASE
-      .map((chunk, i) => ({ chunk, score: cosineSimilarity(queryVec, chunkEmbeddings[i]), vector: chunkEmbeddings[i] }))
+      .map((chunk, i) => ({ chunk, score: dotProduct(queryVec, chunkEmbeddings[i]), vector: chunkEmbeddings[i] }))
       .sort((a, b) => b.score - a.score)
       .slice(0, topK)
       .filter(r => r.score > 0.5)
@@ -468,23 +462,22 @@
     sendBtn.disabled = true;
 
     appendMsg('user', text);
-
-    // Retrieve relevant chunks for this query (embedding-based)
-    const results = await retrieve(text);
-
-    // Augment the message with retrieved context before sending to Gemini
-    let augmented = text;
-    if (results.length > 0) {
-      augmented = `[Context from knowledge base:\n${results.map((r, i) => `${i + 1}. ${r.chunk}`).join('\n')}]\n\nUser question: ${text}`;
-      appendRagContext(results);
-    }
-
-    // Store original text in history so future turns stay readable
-    history.push({ role: 'user', content: augmented });
-
     const thinking = appendThinking();
 
     try {
+      // Retrieve relevant chunks for this query (embedding-based)
+      const results = await retrieve(text);
+
+      // Augment the message with retrieved context before sending to Gemini
+      let augmented = text;
+      if (results.length > 0) {
+        augmented = `[Context from knowledge base:\n${results.map((r, i) => `${i + 1}. ${r.chunk}`).join('\n')}]\n\nUser question: ${text}`;
+        appendRagContext(results);
+      }
+
+      // Store original text in history so future turns stay readable
+      history.push({ role: 'user', content: augmented });
+
       const res = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

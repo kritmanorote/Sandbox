@@ -104,15 +104,12 @@ def embed(req: EmbedRequest):
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
     genai.configure(api_key=api_key)
-    embeddings = []
-    for text in req.texts:
-        result = genai.embed_content(
-            model="models/gemini-embedding-001",
-            content=text,
-            task_type=req.task_type
-        )
-        embeddings.append(result["embedding"])
-    return {"embeddings": embeddings}
+    result = genai.embed_content(
+        model="models/gemini-embedding-001",
+        content=req.texts,
+        task_type=req.task_type
+    )
+    return {"embeddings": result["embedding"]}
 
 
 @app.post("/chat")
