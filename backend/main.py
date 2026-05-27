@@ -3,7 +3,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List
 import psycopg2
+import google.generativeai as genai
 
 load_dotenv()
 
@@ -45,6 +47,14 @@ class ScoreEntry(BaseModel):
     score: int
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+
 @app.get("/")
 def root():
     return {"message": "Hello, World!"}
@@ -81,6 +91,23 @@ def submit_score(entry: ScoreEntry):
     cur.close()
     conn.close()
     return {"id": new_id, "name": entry.name, "score": entry.score}
+
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    history = [
+        {"role": m.role, "parts": [m.content]}
+        for m in req.messages[:-1]
+    ]
+    chat_session = model.start_chat(history=history)
+    last = req.messages[-1].content
+    response = chat_session.send_message(last)
+    return {"reply": response.text}
 
 
 @app.get("/leaderboard")

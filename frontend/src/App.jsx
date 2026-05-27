@@ -23,6 +23,7 @@ function App() {
   }, [])
 
   const gameUrl = `/neonDash/index.html?api=${encodeURIComponent(API_URL)}`
+  const chatUrl = `/chat/index.html?api=${encodeURIComponent(API_URL)}`
 
   return (
     <>
@@ -40,6 +41,9 @@ function App() {
           </a>
           <a href="/pacman/index.html" target="_blank" rel="noopener noreferrer">
             <button type="button" className="counter">Play Pacman</button>
+          </a>
+          <a href={chatUrl} target="_blank" rel="noopener noreferrer">
+            <button type="button" className="counter">Open Chat</button>
           </a>
         </div>
       </section>

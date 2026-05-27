@@ -2,3 +2,4 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.2
 psycopg2-binary==2.9.10
 python-dotenv==1.1.0
+google-generativeai==0.8.5

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Neon Chat</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a1a;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%;
+    max-width: 760px;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid #1a1a3a;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-size: 1.3rem;
+    color: #00ffff;
+    text-shadow: 0 0 8px #00ffff88;
+    letter-spacing: 2px;
+  }
+
+  header a {
+    margin-left: auto;
+    color: #888;
+    text-decoration: none;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+  }
+
+  header a:hover { color: #00ffff; }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    width: 100%;
+    max-width: 760px;
+    padding: 20px 20px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-behavior: smooth;
+  }
+
+  .msg {
+    max-width: 80%;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .msg.user {
+    align-self: flex-end;
+    background: #1a1a3a;
+    border: 1px solid #00ffff44;
+    color: #e0e0e0;
+  }
+
+  .msg.assistant {
+    align-self: flex-start;
+    background: #0f1420;
+    border: 1px solid #c026d344;
+    color: #d8d8f0;
+  }
+
+  .msg.assistant .name { color: #c026d3; font-size: 0.75rem; margin-bottom: 4px; letter-spacing: 1px; }
+  .msg.user .name { display: none; }
+
+  .msg.thinking {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    color: #444;
+    font-size: 0.8rem;
+    padding: 4px 0;
+    animation: blink 1s step-start infinite;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  #input-row {
+    width: 100%;
+    max-width: 760px;
+    padding: 12px 20px 20px;
+    display: flex;
+    gap: 10px;
+  }
+
+  #user-input {
+    flex: 1;
+    background: #0f1420;
+    border: 1px solid #00ffff55;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.92rem;
+    padding: 10px 14px;
+    border-radius: 8px;
+    outline: none;
+    resize: none;
+    line-height: 1.5;
+    max-height: 120px;
+    transition: border-color 0.2s;
+  }
+
+  #user-input:focus { border-color: #00ffff; }
+  #user-input::placeholder { color: #444; }
+
+  #send-btn {
+    background: #00ffff22;
+    border: 1px solid #00ffff88;
+    color: #00ffff;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: background 0.2s, box-shadow 0.2s;
+    align-self: flex-end;
+    white-space: nowrap;
+  }
+
+  #send-btn:hover { background: #00ffff44; box-shadow: 0 0 10px #00ffff55; }
+  #send-btn:disabled { opacity: 0.4; cursor: default; }
+
+  #error-banner {
+    display: none;
+    width: 100%;
+    max-width: 760px;
+    padding: 8px 20px;
+    background: #2a0a0a;
+    border-top: 1px solid #ff004488;
+    color: #ff6677;
+    font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>// NEON CHAT</h1>
+  <a href="/">← Back</a>
+</header>
+
+<div id="messages"></div>
+<div id="error-banner"></div>
+
+<div id="input-row">
+  <textarea id="user-input" rows="1" placeholder="Ask anything..." maxlength="4000"></textarea>
+  <button id="send-btn">SEND</button>
+</div>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const API_URL = params.get('api') || 'http://localhost:8000';
+
+  const messagesEl = document.getElementById('messages');
+  const inputEl = document.getElementById('user-input');
+  const sendBtn = document.getElementById('send-btn');
+  const errorBanner = document.getElementById('error-banner');
+
+  const history = [];
+
+  function showError(msg) {
+    errorBanner.textContent = msg;
+    errorBanner.style.display = 'block';
+    setTimeout(() => { errorBanner.style.display = 'none'; }, 5000);
+  }
+
+  function appendMsg(role, content) {
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    if (role === 'assistant') {
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = 'GEMINI';
+      div.appendChild(name);
+    }
+    const text = document.createElement('div');
+    text.textContent = content;
+    div.appendChild(text);
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  function appendThinking() {
+    const div = document.createElement('div');
+    div.className = 'msg thinking';
+    div.textContent = 'thinking...';
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    sendBtn.disabled = true;
+
+    history.push({ role: 'user', content: text });
+    appendMsg('user', text);
+
+    const thinking = appendThinking();
+
+    try {
+      const res = await fetch(`${API_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const reply = data.reply;
+      history.push({ role: 'model', content: reply });
+      thinking.remove();
+      appendMsg('assistant', reply);
+    } catch (e) {
+      thinking.remove();
+      showError(`Error: ${e.message}`);
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  });
+</script>
+</body>
+</html>
