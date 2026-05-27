@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from google.api_core.exceptions import ResourceExhausted, GoogleAPIError
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
@@ -104,12 +105,17 @@ def embed(req: EmbedRequest):
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
     genai.configure(api_key=api_key)
-    result = genai.embed_content(
-        model="models/gemini-embedding-001",
-        content=req.texts,
-        task_type=req.task_type
-    )
-    return {"embeddings": result["embedding"]}
+    try:
+        result = genai.embed_content(
+            model="models/gemini-embedding-001",
+            content=req.texts,
+            task_type=req.task_type
+        )
+        return {"embeddings": result["embedding"]}
+    except ResourceExhausted as e:
+        raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")
+    except GoogleAPIError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.post("/chat")
@@ -126,10 +132,15 @@ def chat(req: ChatRequest):
         {"role": m.role, "parts": [m.content]}
         for m in req.messages[:-1]
     ]
-    chat_session = model.start_chat(history=history)
-    last = req.messages[-1].content
-    response = chat_session.send_message(last)
-    return {"reply": response.text}
+    try:
+        chat_session = model.start_chat(history=history)
+        last = req.messages[-1].content
+        response = chat_session.send_message(last)
+        return {"reply": response.text}
+    except ResourceExhausted:
+        raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")
+    except GoogleAPIError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.get("/leaderboard")
