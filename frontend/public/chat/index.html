@@ -253,58 +253,19 @@
 </div>
 
 <script>
-  // ─── Knowledge base ────────────────────────────────────────────────────────
-  const KNOWLEDGE_BASE = [
-    "Neon Dash is a side-scrolling obstacle game built with Phaser 3. The player controls a neon character that must dodge incoming obstacles. Scores are saved to a leaderboard via the FastAPI backend.",
-    "Pacman is a maze game rewritten from scratch in JavaScript Canvas (no libraries). It has four ghosts: Red, Pink, Cyan, and Orange, each with unique scatter corner targets.",
-    "Ghosts in Pacman have four AI modes: scatter (head to corner), chase (target Pacman), frightened (turn blue, move randomly after Pacman eats a power pellet), and eaten (return to ghost house).",
-    "The leaderboard stores top scores in a Neon PostgreSQL database. The query groups by player name and returns MAX(score) per player, showing only the top 5.",
-    "The backend is built with FastAPI and deployed on Render (free tier). It handles leaderboard reads/writes and proxies AI requests to the Gemini API to keep the API key server-side.",
-    "The frontend is built with React and Vite, deployed as a static site on Render. Game pages (Neon Dash, Pacman, Chat) are standalone HTML files in the public folder.",
-    "Mobile controls for Pacman include a D-pad overlay (visible only on touch devices via CSS pointer:coarse media query) and swipe gesture detection on the canvas element.",
-    "The Neon Chat page is a standalone HTML file. It keeps conversation history in a JS array on the client and sends the full history to the backend on every message for multi-turn context.",
-    "The project uses a Render Blueprint (render.yaml) to define both the web service (backend) and static site (frontend) so they can be deployed together from one GitHub repo.",
-  ];
-
-  // ─── Embeddings ────────────────────────────────────────────────────────────
-  function dotProduct(a, b) {
-    return a.reduce((sum, ai, i) => sum + ai * b[i], 0);
-  }
-
-  async function fetchEmbeddings(texts, taskType = 'RETRIEVAL_DOCUMENT') {
-    const res = await fetch(`${API_URL}/embed`, {
+  // ─── Retrieval (vectors stored in DB, search via /search endpoint) ──────────
+  async function retrieve(query) {
+    const res = await fetch(`${API_URL}/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texts, task_type: taskType }),
+      body: JSON.stringify({ query, top_k: 2, threshold: 0.5 }),
     });
-    const data = await res.json();
-    return data.embeddings;
-  }
-
-  // Pre-computed embeddings for all chunks — loaded once at startup.
-  let chunkEmbeddings = null;
-
-  async function initEmbeddings() {
-    setInputState('loading');
-    try {
-      chunkEmbeddings = await fetchEmbeddings(KNOWLEDGE_BASE, 'RETRIEVAL_DOCUMENT');
-      setInputState('ready');
-    } catch (e) {
-      setInputState('ready');
-      showError(`Embeddings failed to load: ${e.message}. RAG disabled.`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
     }
-  }
-
-  // ─── Retrieval ─────────────────────────────────────────────────────────────
-  async function retrieve(query, topK = 2) {
-    if (!chunkEmbeddings) return [];
-    const [queryVec] = await fetchEmbeddings([query], 'RETRIEVAL_QUERY');
-    return KNOWLEDGE_BASE
-      .map((chunk, i) => ({ chunk, score: dotProduct(queryVec, chunkEmbeddings[i]), vector: chunkEmbeddings[i] }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
-      .filter(r => r.score > 0.5)
-      .map(r => ({ ...r, queryVec }));
+    const data = await res.json();
+    return data.results.map(r => ({ ...r, queryVec: data.query_vector }));
   }
 
   // ─── UI helpers ────────────────────────────────────────────────────────────
@@ -327,19 +288,6 @@
   });
 
   const history = [];
-
-  function setInputState(state) {
-    if (state === 'loading') {
-      inputEl.placeholder = 'Loading embeddings...';
-      inputEl.disabled = true;
-      sendBtn.disabled = true;
-    } else {
-      inputEl.placeholder = 'Ask anything...';
-      inputEl.disabled = false;
-      sendBtn.disabled = false;
-      inputEl.focus();
-    }
-  }
 
   function showError(msg) {
     errorBanner.textContent = msg;
@@ -520,7 +468,6 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
   });
 
-  initEmbeddings();
 </script>
 </body>
 </html>

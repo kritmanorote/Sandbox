@@ -19,6 +19,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+CHUNKS = [
+    "Neon Dash is a side-scrolling obstacle game built with Phaser 3. The player controls a neon character that must dodge incoming obstacles. Scores are saved to a leaderboard via the FastAPI backend.",
+    "Pacman is a maze game rewritten from scratch in JavaScript Canvas (no libraries). It has four ghosts: Red, Pink, Cyan, and Orange, each with unique scatter corner targets.",
+    "Ghosts in Pacman have four AI modes: scatter (head to corner), chase (target Pacman), frightened (turn blue, move randomly after Pacman eats a power pellet), and eaten (return to ghost house).",
+    "The leaderboard stores top scores in a Neon PostgreSQL database. The query groups by player name and returns MAX(score) per player, showing only the top 5.",
+    "The backend is built with FastAPI and deployed on Render (free tier). It handles leaderboard reads/writes and proxies AI requests to the Gemini API to keep the API key server-side.",
+    "The frontend is built with React and Vite, deployed as a static site on Render. Game pages (Neon Dash, Pacman, Chat) are standalone HTML files in the public folder.",
+    "Mobile controls for Pacman include a D-pad overlay (visible only on touch devices via CSS pointer:coarse media query) and swipe gesture detection on the canvas element.",
+    "The Neon Chat page is a standalone HTML file. It keeps conversation history in a JS array on the client and sends the full history to the backend on every message for multi-turn context.",
+    "The project uses a Render Blueprint (render.yaml) to define both the web service (backend) and static site (frontend) so they can be deployed together from one GitHub repo.",
+]
+
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -27,6 +39,7 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
+    cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS leaderboard (
             id SERIAL PRIMARY KEY,
@@ -35,12 +48,53 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS chunks (
+            id SERIAL PRIMARY KEY,
+            content TEXT NOT NULL,
+            embedding vector(3072)
+        )
+    """)
     conn.commit()
     cur.close()
     conn.close()
 
 
+def seed_chunks():
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM chunks")
+    if cur.fetchone()[0] > 0:
+        cur.close()
+        conn.close()
+        return
+    try:
+        genai.configure(api_key=api_key)
+        result = genai.embed_content(
+            model="models/gemini-embedding-001",
+            content=CHUNKS,
+            task_type="RETRIEVAL_DOCUMENT"
+        )
+        for chunk, emb in zip(CHUNKS, result["embedding"]):
+            vec_str = '[' + ','.join(map(str, emb)) + ']'
+            cur.execute(
+                "INSERT INTO chunks (content, embedding) VALUES (%s, %s::vector)",
+                (chunk, vec_str)
+            )
+        conn.commit()
+        print(f"Seeded {len(CHUNKS)} chunks into database.")
+    except Exception as e:
+        print(f"Warning: chunk seeding failed: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+
 init_db()
+seed_chunks()
 
 
 class ScoreEntry(BaseModel):
@@ -56,9 +110,10 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     system_instruction: str = ""
 
-class EmbedRequest(BaseModel):
-    texts: List[str]
-    task_type: str = "RETRIEVAL_DOCUMENT"
+class SearchRequest(BaseModel):
+    query: str
+    top_k: int = 2
+    threshold: float = 0.5
 
 
 @app.get("/")
@@ -80,39 +135,40 @@ def health():
         return {"status": "ok", "db": f"error: {str(e)}"}
 
 
-@app.post("/leaderboard")
-def submit_score(entry: ScoreEntry):
-    if not entry.name.strip():
-        raise HTTPException(status_code=400, detail="Name is required")
-    if entry.score < 0:
-        raise HTTPException(status_code=400, detail="Invalid score")
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO leaderboard (name, score) VALUES (%s, %s) RETURNING id",
-        (entry.name.strip()[:32], entry.score)
-    )
-    new_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
-    return {"id": new_id, "name": entry.name, "score": entry.score}
-
-
-@app.post("/embed")
-def embed(req: EmbedRequest):
+@app.post("/search")
+def search(req: SearchRequest):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
-    genai.configure(api_key=api_key)
     try:
+        genai.configure(api_key=api_key)
         result = genai.embed_content(
             model="models/gemini-embedding-001",
-            content=req.texts,
-            task_type=req.task_type
+            content=req.query,
+            task_type="RETRIEVAL_QUERY"
         )
-        return {"embeddings": result["embedding"]}
-    except ResourceExhausted as e:
+        query_vec = result["embedding"]
+        vec_str = '[' + ','.join(map(str, query_vec)) + ']'
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT content, embedding::float8[], 1 - (embedding <=> %s::vector) AS score
+            FROM chunks
+            WHERE 1 - (embedding <=> %s::vector) > %s
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+        """, (vec_str, vec_str, req.threshold, vec_str, req.top_k))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return {
+            "query_vector": query_vec,
+            "results": [
+                {"chunk": r[0], "vector": list(r[1]), "score": float(r[2])}
+                for r in rows
+            ]
+        }
+    except ResourceExhausted:
         raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")
     except GoogleAPIError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -141,6 +197,25 @@ def chat(req: ChatRequest):
         raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")
     except GoogleAPIError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/leaderboard")
+def submit_score(entry: ScoreEntry):
+    if not entry.name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+    if entry.score < 0:
+        raise HTTPException(status_code=400, detail="Invalid score")
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO leaderboard (name, score) VALUES (%s, %s) RETURNING id",
+        (entry.name.strip()[:32], entry.score)
+    )
+    new_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {"id": new_id, "name": entry.name, "score": entry.score}
 
 
 @app.get("/leaderboard")
