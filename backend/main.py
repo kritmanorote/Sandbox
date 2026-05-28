@@ -31,6 +31,26 @@ CHUNKS = [
     "The project uses a Render Blueprint (render.yaml) to define both the web service (backend) and static site (frontend) so they can be deployed together from one GitHub repo.",
 ]
 
+# Tool definition given to Gemini — describes what the function does and what args it takes
+SEARCH_TOOL = genai.protos.Tool(
+    function_declarations=[
+        genai.protos.FunctionDeclaration(
+            name="search_knowledge_base",
+            description="Search the project knowledge base for facts about Neon Dash, Pacman, ghosts, leaderboard, backend, frontend, mobile controls, or the chat feature. Call this whenever the user asks about this project.",
+            parameters=genai.protos.Schema(
+                type=genai.protos.Type.OBJECT,
+                properties={
+                    "query": genai.protos.Schema(
+                        type=genai.protos.Type.STRING,
+                        description="The search query"
+                    )
+                },
+                required=["query"]
+            )
+        )
+    ]
+)
+
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -93,6 +113,37 @@ def seed_chunks():
         conn.close()
 
 
+def do_search(query: str, top_k: int = 2, threshold: float = 0.5):
+    """Embed query and search chunks table by cosine similarity."""
+    result = genai.embed_content(
+        model="models/gemini-embedding-001",
+        content=query,
+        task_type="RETRIEVAL_QUERY"
+    )
+    query_vec = result["embedding"]
+    vec_str = '[' + ','.join(map(str, query_vec)) + ']'
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT content, embedding::text, 1 - (embedding <=> %s::vector) AS score
+        FROM chunks
+        WHERE 1 - (embedding <=> %s::vector) > %s
+        ORDER BY embedding <=> %s::vector
+        LIMIT %s
+    """, (vec_str, vec_str, threshold, vec_str, top_k))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return query_vec, [
+        {
+            "chunk": r[0],
+            "vector": [float(x) for x in r[1].strip('[]').split(',')],
+            "score": float(r[2])
+        }
+        for r in rows
+    ]
+
+
 init_db()
 seed_chunks()
 
@@ -109,6 +160,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     system_instruction: str = ""
+    use_agent: bool = False
 
 class SearchRequest(BaseModel):
     query: str
@@ -142,32 +194,8 @@ def search(req: SearchRequest):
         raise HTTPException(status_code=503, detail="AI service not configured")
     try:
         genai.configure(api_key=api_key)
-        result = genai.embed_content(
-            model="models/gemini-embedding-001",
-            content=req.query,
-            task_type="RETRIEVAL_QUERY"
-        )
-        query_vec = result["embedding"]
-        vec_str = '[' + ','.join(map(str, query_vec)) + ']'
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT content, embedding::float8[], 1 - (embedding <=> %s::vector) AS score
-            FROM chunks
-            WHERE 1 - (embedding <=> %s::vector) > %s
-            ORDER BY embedding <=> %s::vector
-            LIMIT %s
-        """, (vec_str, vec_str, req.threshold, vec_str, req.top_k))
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return {
-            "query_vector": query_vec,
-            "results": [
-                {"chunk": r[0], "vector": list(r[1]), "score": float(r[2])}
-                for r in rows
-            ]
-        }
+        query_vec, results = do_search(req.query, req.top_k, req.threshold)
+        return {"query_vector": query_vec, "results": results}
     except ResourceExhausted:
         raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")
     except GoogleAPIError as e:
@@ -180,19 +208,53 @@ def chat(req: ChatRequest):
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
     genai.configure(api_key=api_key)
+
+    tools = [SEARCH_TOOL] if req.use_agent else []
     model = genai.GenerativeModel(
         "gemini-2.5-flash",
-        system_instruction=req.system_instruction or None
+        system_instruction=req.system_instruction or None,
+        tools=tools or None
     )
     history = [
         {"role": m.role, "parts": [m.content]}
         for m in req.messages[:-1]
     ]
+
     try:
         chat_session = model.start_chat(history=history)
-        last = req.messages[-1].content
-        response = chat_session.send_message(last)
-        return {"reply": response.text}
+        response = chat_session.send_message(req.messages[-1].content)
+        tool_calls_log = []
+
+        # ReAct loop: keep running until Gemini gives a text response
+        for _ in range(5):
+            fn_part = next(
+                (p for p in response.candidates[0].content.parts if p.function_call.name),
+                None
+            )
+            if not fn_part:
+                break
+
+            fc = fn_part.function_call
+            if fc.name == "search_knowledge_base":
+                query = fc.args["query"]
+                _, results = do_search(query)
+                chunks = [r["chunk"] for r in results]
+                tool_calls_log.append({"query": query, "results": chunks})
+
+                # Send tool result back so Gemini can continue reasoning
+                response = chat_session.send_message(
+                    genai.protos.Content(
+                        parts=[genai.protos.Part(
+                            function_response=genai.protos.FunctionResponse(
+                                name=fc.name,
+                                response={"results": chunks}
+                            )
+                        )]
+                    )
+                )
+
+        return {"reply": response.text, "tool_calls": tool_calls_log}
+
     except ResourceExhausted:
         raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")
     except GoogleAPIError as e:

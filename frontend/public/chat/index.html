@@ -43,8 +43,7 @@
 
   header a:hover { color: #00ffff; }
 
-  #mode-toggle {
-    margin-left: auto;
+  .header-btn {
     background: transparent;
     border: 1px solid #444;
     color: #888;
@@ -58,10 +57,57 @@
     white-space: nowrap;
   }
 
+  #mode-toggle { margin-left: auto; }
+
   #mode-toggle.restricted {
     border-color: #a855f7;
     color: #a855f7;
     box-shadow: 0 0 8px #a855f733;
+  }
+
+  #agent-toggle.active {
+    border-color: #00ffff;
+    color: #00ffff;
+    box-shadow: 0 0 8px #00ffff33;
+  }
+
+  /* Tool call pill */
+  .tool-call {
+    align-self: flex-start;
+    max-width: 80%;
+    font-size: 0.75rem;
+    color: #00ffff;
+    border: 1px solid #00ffff44;
+    border-radius: 8px;
+  }
+
+  .tool-toggle {
+    padding: 5px 12px;
+    cursor: pointer;
+    user-select: none;
+    letter-spacing: 1px;
+  }
+
+  .tool-toggle::before { content: '▶ '; font-size: 0.6rem; }
+  .tool-toggle.open::before { content: '▼ '; }
+
+  .tool-chunks {
+    display: none;
+    padding: 6px 12px 8px;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid #00ffff22;
+  }
+
+  .tool-chunks.open { display: flex; }
+
+  .tool-chunk {
+    background: #0a1a1a;
+    border-left: 2px solid #00ffff;
+    padding: 4px 8px;
+    color: #a0e8e8;
+    border-radius: 0 4px 4px 0;
+    white-space: pre-wrap;
   }
 
   #messages {
@@ -240,7 +286,8 @@
 
 <header>
   <h1>// NEON CHAT</h1>
-  <button id="mode-toggle">FREE MODE</button>
+  <button id="agent-toggle" class="header-btn">AGENT OFF</button>
+  <button id="mode-toggle" class="header-btn">FREE MODE</button>
   <a href="/">← Back</a>
 </header>
 
@@ -277,14 +324,23 @@
   const sendBtn = document.getElementById('send-btn');
   const errorBanner = document.getElementById('error-banner');
   const modeToggle = document.getElementById('mode-toggle');
+  const agentToggle = document.getElementById('agent-toggle');
 
   const SYSTEM_INSTRUCTION = 'Answer ONLY using the provided context. If the answer is not in the context, say "I don\'t have that information in my knowledge base."';
 
   let restricted = false;
+  let useAgent = false;
+
   modeToggle.addEventListener('click', () => {
     restricted = !restricted;
     modeToggle.textContent = restricted ? 'RAG ONLY' : 'FREE MODE';
     modeToggle.classList.toggle('restricted', restricted);
+  });
+
+  agentToggle.addEventListener('click', () => {
+    useAgent = !useAgent;
+    agentToggle.textContent = useAgent ? 'AGENT ON' : 'AGENT OFF';
+    agentToggle.classList.toggle('active', useAgent);
   });
 
   const history = [];
@@ -374,6 +430,36 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function appendToolCalls(toolCalls) {
+    toolCalls.forEach(tc => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'tool-call';
+
+      const toggle = document.createElement('div');
+      toggle.className = 'tool-toggle';
+      toggle.textContent = `AGENT called: search_knowledge_base("${tc.query}")`;
+
+      const chunkList = document.createElement('div');
+      chunkList.className = 'tool-chunks';
+      tc.results.forEach(chunk => {
+        const div = document.createElement('div');
+        div.className = 'tool-chunk';
+        div.textContent = chunk;
+        chunkList.appendChild(div);
+      });
+
+      toggle.addEventListener('click', () => {
+        toggle.classList.toggle('open');
+        chunkList.classList.toggle('open');
+      });
+
+      wrapper.appendChild(toggle);
+      wrapper.appendChild(chunkList);
+      messagesEl.appendChild(wrapper);
+    });
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
   function appendMsg(role, content) {
     const div = document.createElement('div');
     div.className = `msg ${role}`;
@@ -413,18 +499,20 @@
     const thinking = appendThinking();
 
     try {
-      // Retrieve relevant chunks for this query (embedding-based)
-      const results = await retrieve(text);
-
-      // Augment the message with retrieved context before sending to Gemini
       let augmented = text;
-      if (results.length > 0) {
-        augmented = `[Context from knowledge base:\n${results.map((r, i) => `${i + 1}. ${r.chunk}`).join('\n')}]\n\nUser question: ${text}`;
-        appendRagContext(results);
-      }
 
-      // Store original text in history so future turns stay readable
-      history.push({ role: 'user', content: augmented });
+      if (useAgent) {
+        // Agent mode: send directly — Gemini decides when to call search
+        history.push({ role: 'user', content: text });
+      } else {
+        // Manual RAG mode: frontend retrieves context and injects it
+        const results = await retrieve(text);
+        if (results.length > 0) {
+          augmented = `[Context from knowledge base:\n${results.map((r, i) => `${i + 1}. ${r.chunk}`).join('\n')}]\n\nUser question: ${text}`;
+          appendRagContext(results);
+        }
+        history.push({ role: 'user', content: augmented });
+      }
 
       const res = await fetch(`${API_URL}/chat`, {
         method: 'POST',
@@ -432,6 +520,7 @@
         body: JSON.stringify({
           messages: history,
           system_instruction: restricted ? SYSTEM_INSTRUCTION : '',
+          use_agent: useAgent,
         }),
       });
 
@@ -444,6 +533,7 @@
       const reply = data.reply;
       history.push({ role: 'model', content: reply });
       thinking.remove();
+      if (data.tool_calls?.length) appendToolCalls(data.tool_calls);
       appendMsg('assistant', reply);
     } catch (e) {
       thinking.remove();
