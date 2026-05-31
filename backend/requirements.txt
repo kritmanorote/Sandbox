@@ -1,5 +1,10 @@
 fastapi==0.115.12
 uvicorn[standard]==0.34.2
 psycopg2-binary==2.9.10
+psycopg[binary]==3.2.10
 python-dotenv==1.1.0
 google-generativeai==0.8.5
+langchain-core>=0.3,<2
+langchain-google-genai>=2.1,<5
+langchain-postgres>=0.0.14,<1
+langgraph>=0.6,<2

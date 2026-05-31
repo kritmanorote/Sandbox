@@ -8,6 +8,15 @@ from typing import List
 import psycopg2
 import google.generativeai as genai
 
+from langchain_core.tools import tool
+from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_postgres import PGVector
+from langgraph.prebuilt import create_react_agent
+
+from exchange_log import LoggedChatSession, summarize_langchain_result
+
 load_dotenv()
 
 app = FastAPI()
@@ -148,6 +157,63 @@ init_db()
 seed_chunks()
 
 
+# ─── LangChain setup ───────────────────────────────────────────────────────
+# Same embedding model the existing `chunks` table was seeded with — keeps
+# retrieval quality comparable between /chat and /chat-langchain.
+lc_embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/gemini-embedding-001",
+    google_api_key=os.environ.get("GEMINI_API_KEY"),
+)
+
+# PGVector auto-creates `langchain_pg_collection` + `langchain_pg_embedding`
+# tables in the same Neon DB. Distinct from the hand-rolled `chunks` table —
+# the user can inspect both schemas side by side.
+lc_vectorstore = PGVector(
+    embeddings=lc_embeddings,
+    collection_name="chunks_lc",
+    connection=os.environ["DATABASE_URL"],
+    use_jsonb=True,
+)
+
+
+def seed_langchain_chunks():
+    """Seed CHUNKS into the LangChain PGVector collection once."""
+    if not os.environ.get("GEMINI_API_KEY"):
+        return
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT COUNT(*) FROM langchain_pg_embedding e
+            JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+            WHERE c.name = 'chunks_lc'
+        """)
+        if cur.fetchone()[0] > 0:
+            return
+    except psycopg2.errors.UndefinedTable:
+        conn.rollback()  # tables don't exist yet — PGVector will create them
+    finally:
+        cur.close()
+        conn.close()
+    try:
+        lc_vectorstore.add_documents([Document(page_content=c) for c in CHUNKS])
+        print(f"Seeded {len(CHUNKS)} chunks into LangChain PGVector collection.")
+    except Exception as e:
+        print(f"Warning: LangChain chunk seeding failed: {e}")
+
+
+seed_langchain_chunks()
+
+
+@tool
+def search_knowledge_base_lc(query: str) -> list[str]:
+    """Search the project knowledge base for facts about Neon Dash, Pacman,
+    ghosts, leaderboard, backend, frontend, mobile controls, or the chat
+    feature. Call this whenever the user asks about this project."""
+    docs = lc_vectorstore.similarity_search(query, k=2)
+    return [doc.page_content for doc in docs]
+
+
 class ScoreEntry(BaseModel):
     name: str
     score: int
@@ -211,7 +277,7 @@ def chat(req: ChatRequest):
 
     tools = [SEARCH_TOOL] if req.use_agent else []
     model = genai.GenerativeModel(
-        "gemini-2.5-flash",
+        "gemini-3.1-flash-lite",
         system_instruction=req.system_instruction or None,
         tools=tools or None
     )
@@ -220,10 +286,12 @@ def chat(req: ChatRequest):
         for m in req.messages[:-1]
     ]
 
+    last_msg = req.messages[-1].content
+    tool_calls_log = []
+
     try:
-        chat_session = model.start_chat(history=history)
-        response = chat_session.send_message(req.messages[-1].content)
-        tool_calls_log = []
+        session = LoggedChatSession(model, history)
+        response = session.send_text(last_msg)
 
         # ReAct loop: keep running until Gemini gives a text response
         for _ in range(5):
@@ -240,20 +308,43 @@ def chat(req: ChatRequest):
                 _, results = do_search(query)
                 chunks = [r["chunk"] for r in results]
                 tool_calls_log.append({"query": query, "results": chunks})
+                response = session.send_function_response(fc.name, {"results": chunks})
 
-                # Send tool result back so Gemini can continue reasoning
-                response = chat_session.send_message(
-                    genai.protos.Content(
-                        parts=[genai.protos.Part(
-                            function_response=genai.protos.FunctionResponse(
-                                name=fc.name,
-                                response={"results": chunks}
-                            )
-                        )]
-                    )
-                )
+        return {"reply": response.text, "tool_calls": tool_calls_log, "exchange_log": session.log}
 
-        return {"reply": response.text, "tool_calls": tool_calls_log}
+    except ResourceExhausted:
+        raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")
+    except GoogleAPIError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/chat-langchain")
+def chat_langchain(req: ChatRequest):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    model = ChatGoogleGenerativeAI(
+        model="gemini-3.1-flash-lite",
+        google_api_key=api_key,
+    )
+    tools = [search_knowledge_base_lc] if req.use_agent else []
+    agent = create_react_agent(model, tools=tools)
+
+    # Translate the frontend's history into LangChain message types.
+    messages = []
+    if req.system_instruction:
+        messages.append(SystemMessage(content=req.system_instruction))
+    for m in req.messages:
+        if m.role == "user":
+            messages.append(HumanMessage(content=m.content))
+        elif m.role == "model":
+            messages.append(AIMessage(content=m.content))
+
+    try:
+        result = agent.invoke({"messages": messages})
+        reply, tool_calls_log, exchange_log = summarize_langchain_result(result)
+        return {"reply": reply, "tool_calls": tool_calls_log, "exchange_log": exchange_log}
 
     except ResourceExhausted:
         raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")

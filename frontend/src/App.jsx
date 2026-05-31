@@ -36,15 +36,17 @@ function App() {
         <div>
           <h1>Neon Dash</h1>
           <p><strong>{backendStatus}</strong></p>
-          <a href={gameUrl} target="_blank" rel="noopener noreferrer">
-            <button type="button" className="counter">Play Neon Dash</button>
-          </a>
-          <a href="/pacman/index.html" target="_blank" rel="noopener noreferrer">
-            <button type="button" className="counter">Play Pacman</button>
-          </a>
-          <a href={chatUrl} target="_blank" rel="noopener noreferrer">
-            <button type="button" className="counter">Open Chat</button>
-          </a>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <a href={gameUrl} target="_blank" rel="noopener noreferrer">
+              <button type="button" className="counter">Play Neon Dash</button>
+            </a>
+            <a href="/pacman/index.html" target="_blank" rel="noopener noreferrer">
+              <button type="button" className="counter">Play Pacman</button>
+            </a>
+            <a href={chatUrl} target="_blank" rel="noopener noreferrer">
+              <button type="button" className="counter">Open Chat</button>
+            </a>
+          </div>
         </div>
       </section>
 

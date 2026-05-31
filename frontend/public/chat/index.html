@@ -71,6 +71,12 @@
     box-shadow: 0 0 8px #00ffff33;
   }
 
+  #impl-toggle.active {
+    border-color: #f59e0b;
+    color: #f59e0b;
+    box-shadow: 0 0 8px #f59e0b33;
+  }
+
   /* Tool call pill */
   .tool-call {
     align-self: flex-start;
@@ -112,6 +118,7 @@
 
   #messages {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     width: 100%;
     max-width: 760px;
@@ -223,6 +230,53 @@
     border-radius: 1px 1px 0 0;
   }
 
+  /* Exchange log pill */
+  .exchange-log {
+    align-self: flex-start;
+    max-width: 90%;
+    font-size: 0.75rem;
+    color: #c4b5fd;
+    border: 1px solid #7c3aed44;
+    border-radius: 8px;
+  }
+
+  .exchange-toggle {
+    padding: 5px 12px;
+    cursor: pointer;
+    user-select: none;
+    letter-spacing: 1px;
+  }
+
+  .exchange-toggle::before { content: '▶ '; font-size: 0.6rem; }
+  .exchange-toggle.open::before { content: '▼ '; }
+
+  .exchange-body {
+    display: none;
+    border-top: 1px solid #7c3aed22;
+  }
+
+  .exchange-body.open { display: block; }
+
+  .exchange-row {
+    padding: 6px 12px;
+    border-bottom: 1px solid #1a1a2a;
+    font-size: 0.68rem;
+  }
+
+  .exchange-label {
+    font-size: 0.65rem;
+    margin-bottom: 3px;
+    letter-spacing: 1px;
+  }
+
+  .exchange-content {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #8899aa;
+    font-size: 0.64rem;
+  }
+
   @keyframes blink { 50% { opacity: 0; } }
 
   #input-row {
@@ -286,7 +340,8 @@
 
 <header>
   <h1>// NEON CHAT</h1>
-  <button id="agent-toggle" class="header-btn">AGENT OFF</button>
+  <button id="agent-toggle" class="header-btn active">AGENT ON</button>
+  <button id="impl-toggle" class="header-btn">RAW</button>
   <button id="mode-toggle" class="header-btn">FREE MODE</button>
   <a href="/">← Back</a>
 </header>
@@ -325,11 +380,13 @@
   const errorBanner = document.getElementById('error-banner');
   const modeToggle = document.getElementById('mode-toggle');
   const agentToggle = document.getElementById('agent-toggle');
+  const implToggle = document.getElementById('impl-toggle');
 
   const SYSTEM_INSTRUCTION = 'Answer ONLY using the provided context. If the answer is not in the context, say "I don\'t have that information in my knowledge base."';
 
   let restricted = false;
-  let useAgent = false;
+  let useAgent = true;
+  let useLangchain = false;
 
   modeToggle.addEventListener('click', () => {
     restricted = !restricted;
@@ -341,6 +398,12 @@
     useAgent = !useAgent;
     agentToggle.textContent = useAgent ? 'AGENT ON' : 'AGENT OFF';
     agentToggle.classList.toggle('active', useAgent);
+  });
+
+  implToggle.addEventListener('click', () => {
+    useLangchain = !useLangchain;
+    implToggle.textContent = useLangchain ? 'LANGCHAIN' : 'RAW';
+    implToggle.classList.toggle('active', useLangchain);
   });
 
   const history = [];
@@ -430,6 +493,71 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function appendExchangeLog(log) {
+    // Gemini SDK uses {role: "user"|"model", parts: [...]}
+    const GEMINI_LABEL_COLORS = { user: '#4ade80', model: '#818cf8' };
+    const GEMINI_ROW_BG = { user: '#0a150a', model: '#0a0a15' };
+    // LangChain BaseMessage.model_dump() — type is "human"/"system"/"ai"/"tool"
+    const LC_LABEL_COLORS = { human: '#4ade80', system: '#4ade80', ai: '#818cf8', tool: '#f59e0b' };
+    const LC_ROW_BG = { human: '#0a150a', system: '#0a150a', ai: '#0a0a15', tool: '#15100a' };
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'exchange-log';
+
+    const toggle = document.createElement('div');
+    toggle.className = 'exchange-toggle';
+    toggle.textContent = `Message log (${log.length} exchanges)`;
+
+    const body = document.createElement('div');
+    body.className = 'exchange-body';
+
+    log.forEach((entry, i) => {
+      const isGemini = entry.role !== undefined;  // {role, parts}
+      const isLangchain = entry.type !== undefined && !isGemini;  // model_dump()
+      const row = document.createElement('div');
+      row.className = 'exchange-row';
+
+      let labelText, labelColor, rowBg;
+      if (isGemini) {
+        labelText = `[${i + 1}] Gemini: ${entry.role}`;
+        labelColor = GEMINI_LABEL_COLORS[entry.role] || '#aaa';
+        rowBg = GEMINI_ROW_BG[entry.role] || '#111';
+      } else if (isLangchain) {
+        labelText = `[${i + 1}] LangChain: ${entry.type}`;
+        labelColor = LC_LABEL_COLORS[entry.type] || '#aaa';
+        rowBg = LC_ROW_BG[entry.type] || '#111';
+      } else {
+        labelText = `[${i + 1}]`;
+        labelColor = '#aaa';
+        rowBg = '#111';
+      }
+      row.style.background = rowBg;
+
+      const label = document.createElement('div');
+      label.className = 'exchange-label';
+      label.style.color = labelColor;
+      label.textContent = labelText;
+
+      const content = document.createElement('pre');
+      content.className = 'exchange-content';
+      content.textContent = JSON.stringify(entry, null, 2);
+
+      row.appendChild(label);
+      row.appendChild(content);
+      body.appendChild(row);
+    });
+
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('open');
+      body.classList.toggle('open');
+    });
+
+    wrapper.appendChild(toggle);
+    wrapper.appendChild(body);
+    messagesEl.appendChild(wrapper);
+    requestAnimationFrame(() => wrapper.scrollIntoView({ block: 'nearest' }));
+  }
+
   function appendToolCalls(toolCalls) {
     toolCalls.forEach(tc => {
       const wrapper = document.createElement('div');
@@ -438,6 +566,13 @@
       const toggle = document.createElement('div');
       toggle.className = 'tool-toggle';
       toggle.textContent = `AGENT called: search_knowledge_base("${tc.query}")`;
+
+      if (tc.raw) {
+        const raw = document.createElement('div');
+        raw.style.cssText = 'padding: 4px 12px 6px; font-size:0.68rem; color:#0891b2; border-bottom: 1px solid #00ffff22; white-space:pre-wrap; word-break:break-all;';
+        raw.textContent = 'Gemini raw response: ' + tc.raw;
+        wrapper.appendChild(raw);
+      }
 
       const chunkList = document.createElement('div');
       chunkList.className = 'tool-chunks';
@@ -514,7 +649,8 @@
         history.push({ role: 'user', content: augmented });
       }
 
-      const res = await fetch(`${API_URL}/chat`, {
+      const endpoint = useLangchain ? '/chat-langchain' : '/chat';
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -535,6 +671,7 @@
       thinking.remove();
       if (data.tool_calls?.length) appendToolCalls(data.tool_calls);
       appendMsg('assistant', reply);
+      if (data.exchange_log?.length) appendExchangeLog(data.exchange_log);
     } catch (e) {
       thinking.remove();
       showError(`Error: ${e.message}`);
