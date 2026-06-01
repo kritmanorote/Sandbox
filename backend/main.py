@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import List
 import psycopg2
 import google.generativeai as genai
+from sqlalchemy import create_engine
 
 from langchain_core.tools import tool
 from langchain_core.documents import Document
@@ -168,10 +169,17 @@ lc_embeddings = GoogleGenerativeAIEmbeddings(
 # PGVector auto-creates `langchain_pg_collection` + `langchain_pg_embedding`
 # tables in the same Neon DB. Distinct from the hand-rolled `chunks` table —
 # the user can inspect both schemas side by side.
+# Use a SQLAlchemy engine with pre_ping so stale Neon connections (idled out
+# server-side) are detected and replaced before the query runs.
+lc_engine = create_engine(
+    os.environ["DATABASE_URL"],
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 lc_vectorstore = PGVector(
     embeddings=lc_embeddings,
     collection_name="chunks_lc",
-    connection=os.environ["DATABASE_URL"],
+    connection=lc_engine,
     use_jsonb=True,
 )
 
