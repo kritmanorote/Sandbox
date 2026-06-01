@@ -517,17 +517,18 @@
       const row = document.createElement('div');
       row.className = 'exchange-row';
 
+      const arrow = entry.direction === 'out' ? '→' : entry.direction === 'in' ? '←' : '·';
       let labelText, labelColor, rowBg;
       if (isGemini) {
-        labelText = `[${i + 1}] Gemini: ${entry.role}`;
+        labelText = `[${i + 1}] ${arrow} Gemini: ${entry.role}`;
         labelColor = GEMINI_LABEL_COLORS[entry.role] || '#aaa';
         rowBg = GEMINI_ROW_BG[entry.role] || '#111';
       } else if (isLangchain) {
-        labelText = `[${i + 1}] LangChain: ${entry.type}`;
+        labelText = `[${i + 1}] ${arrow} LangChain: ${entry.type}`;
         labelColor = LC_LABEL_COLORS[entry.type] || '#aaa';
         rowBg = LC_ROW_BG[entry.type] || '#111';
       } else {
-        labelText = `[${i + 1}]`;
+        labelText = `[${i + 1}] ${arrow}`;
         labelColor = '#aaa';
         rowBg = '#111';
       }

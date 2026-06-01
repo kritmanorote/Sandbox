@@ -343,7 +343,7 @@ def chat_langchain(req: ChatRequest):
 
     try:
         result = agent.invoke({"messages": messages})
-        reply, tool_calls_log, exchange_log = summarize_langchain_result(result)
+        reply, tool_calls_log, exchange_log = summarize_langchain_result(result, len(messages))
         return {"reply": reply, "tool_calls": tool_calls_log, "exchange_log": exchange_log}
 
     except ResourceExhausted:

@@ -17,15 +17,25 @@ class LoggedChatSession:
 
     def __init__(self, model: genai.GenerativeModel, history: list[dict]):
         self.session = model.start_chat(history=history)
-        # Seed the log with prior history so the conversation is complete.
+        # Seed the log with prior history. Each historical entry's direction
+        # is what it was when originally exchanged: user role was sent out,
+        # model role came back in.
         self.log: list[dict] = [
-            {"role": m["role"], "parts": [{"text": p} for p in m["parts"]]}
+            {
+                "direction": "out" if m["role"] == "user" else "in",
+                "role": m["role"],
+                "parts": [{"text": p} for p in m["parts"]],
+            }
             for m in history
         ]
 
     def send_text(self, text: str):
         """Send a plain user message; record both sides."""
-        self.log.append({"role": "user", "parts": [{"text": text}]})
+        self.log.append({
+            "direction": "out",
+            "role": "user",
+            "parts": [{"text": text}],
+        })
         response = self.session.send_message(text)
         self._log_model_response(response)
         return response
@@ -33,6 +43,7 @@ class LoggedChatSession:
     def send_function_response(self, name: str, response_data: dict):
         """Send a function result back to the model; record both sides."""
         self.log.append({
+            "direction": "out",
             "role": "user",
             "parts": [{"function_response": {"name": name, "response": response_data}}],
         })
@@ -56,15 +67,21 @@ class LoggedChatSession:
                 }})
             elif p.text:
                 parts_data.append({"text": p.text})
-        self.log.append({"role": "model", "parts": parts_data})
+        self.log.append({
+            "direction": "in",
+            "role": "model",
+            "parts": parts_data,
+        })
 
 
-def summarize_langchain_result(result: dict) -> tuple[str, list[dict], list[dict]]:
+def summarize_langchain_result(result: dict, input_count: int) -> tuple[str, list[dict], list[dict]]:
     """Unpack a LangChain agent.invoke() result into (reply, tool_calls, exchange_log).
 
     - reply: text of the final AIMessage (handles both str and content-block list)
     - tool_calls: [{query, results}] for the cyan agent pill in the UI
-    - exchange_log: raw model_dump() of every message (the message log)
+    - exchange_log: raw model_dump() of every message, each tagged with
+      direction "out" for the first `input_count` messages (what the app
+      passed in) and "in" for everything the agent added during invoke().
     """
     reply = ""
     tool_calls: list[dict] = []
@@ -98,5 +115,10 @@ def summarize_langchain_result(result: dict) -> tuple[str, list[dict], list[dict
             tool_calls[tool_msg_idx]["results"] = content if isinstance(content, list) else [str(content)]
             tool_msg_idx += 1
 
-    exchange_log = [msg.model_dump() for msg in result["messages"]]
+    # First input_count messages were passed in by the app; the rest were
+    # produced by the agent (model output and any tool messages it triggered).
+    exchange_log = [
+        {"direction": "out" if i < input_count else "in", **msg.model_dump()}
+        for i, msg in enumerate(result["messages"])
+    ]
     return reply, tool_calls, exchange_log
