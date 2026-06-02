@@ -1,10 +1,15 @@
 import os
 from dotenv import load_dotenv
+
+# Load .env BEFORE any Langfuse import so credentials are populated by the
+# time Langfuse's module-level client picks them up.
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from google.api_core.exceptions import ResourceExhausted, GoogleAPIError
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import psycopg2
 import google.generativeai as genai
 from sqlalchemy import create_engine
@@ -17,8 +22,8 @@ from langchain_postgres import PGVector
 from langgraph.prebuilt import create_react_agent
 
 from exchange_log import LoggedChatSession, summarize_langchain_result
-
-load_dotenv()
+from langfuse import get_client
+from langfuse.langchain import CallbackHandler
 
 app = FastAPI()
 
@@ -235,6 +240,7 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     system_instruction: str = ""
     use_agent: bool = False
+    session_id: Optional[str] = None  # client-generated; groups multi-turn traces in Langfuse Sessions
 
 class SearchRequest(BaseModel):
     query: str
@@ -349,8 +355,26 @@ def chat_langchain(req: ChatRequest):
         elif m.role == "model":
             messages.append(AIMessage(content=m.content))
 
+    # Initialize the Langfuse Callback Handler
+    langfuse_handler = CallbackHandler()
+
     try:
-        result = agent.invoke({"messages": messages})
+        result = agent.invoke(
+            {"messages": messages},
+            config={
+                "callbacks": [langfuse_handler],
+                "run_name": "chat-langchain",  # becomes the trace name in Langfuse
+                "metadata": {
+                    # langfuse_ prefixed keys are picked up by the CallbackHandler
+                    "langfuse_session_id": req.session_id,
+                    "langfuse_tags": ["chat-langchain", "agent" if req.use_agent else "no-agent"],
+                },
+            },
+        )
+        # Flush to guarantee delivery in a request-response context
+        get_client().flush()
+
+        
         reply, tool_calls_log, exchange_log = summarize_langchain_result(result, len(messages))
         return {"reply": reply, "tool_calls": tool_calls_log, "exchange_log": exchange_log}
 
@@ -358,6 +382,12 @@ def chat_langchain(req: ChatRequest):
         raise HTTPException(status_code=429, detail="Gemini API rate limit reached. Try again later.")
     except GoogleAPIError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        import traceback
+        with open("error_traceback.txt", "w") as f:
+            traceback.print_exc(file=f)
+        raise e
+
 
 
 @app.post("/leaderboard")

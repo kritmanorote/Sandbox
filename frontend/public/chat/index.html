@@ -407,6 +407,10 @@
   });
 
   const history = [];
+  // Generate a stable session_id per page load so multi-turn traces group
+  // into one Langfuse Session.
+  const sessionId = (crypto.randomUUID && crypto.randomUUID()) ||
+    (`chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
 
   function showError(msg) {
     errorBanner.textContent = msg;
@@ -658,6 +662,7 @@
           messages: history,
           system_instruction: restricted ? SYSTEM_INSTRUCTION : '',
           use_agent: useAgent,
+          session_id: sessionId,
         }),
       });
 
