@@ -34,6 +34,26 @@ if os.environ.get("MLFLOW_TRACKING_URI"):
     mlflow.set_experiment("sandbox-chat")
     mlflow.langchain.autolog()
 
+# OTel path to the same MLflow server — runs ALONGSIDE autolog so the same
+# request produces two traces, one per pipeline, for fidelity comparison.
+# Deliberately uses non-standard env var names: if we set the standard
+# OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, MLflow's own SDK also reads it and
+# switches its export to OTLP/gRPC, silently breaking autolog.
+if os.environ.get("MLFLOW_OTLP_ENDPOINT"):
+    from opentelemetry import trace as otel_trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from openinference.instrumentation.langchain import LangChainInstrumentor
+
+    _otel_provider = TracerProvider()
+    _otel_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+        endpoint=os.environ["MLFLOW_OTLP_ENDPOINT"],
+        headers={"x-mlflow-experiment-id": os.environ.get("MLFLOW_OTLP_EXPERIMENT_ID", "1")},
+    )))
+    otel_trace.set_tracer_provider(_otel_provider)
+    LangChainInstrumentor().instrument(tracer_provider=_otel_provider)
+
 app = FastAPI()
 
 app.add_middleware(
