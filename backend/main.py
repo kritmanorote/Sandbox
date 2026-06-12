@@ -25,6 +25,15 @@ from exchange_log import LoggedChatSession, summarize_langchain_result
 from langfuse import get_client
 from langfuse.langchain import CallbackHandler
 
+# MLflow tracing — local-only for now (mlflow not in requirements.txt, so the
+# Render deploy skips this). Enabled only when MLFLOW_TRACKING_URI is set.
+if os.environ.get("MLFLOW_TRACKING_URI"):
+    import mlflow
+
+    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    mlflow.set_experiment("sandbox-chat")
+    mlflow.langchain.autolog()
+
 app = FastAPI()
 
 app.add_middleware(

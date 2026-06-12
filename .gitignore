@@ -2,4 +2,8 @@
 .env.*
 __pycache__/
 *.pyc
+.venv/
+venv/
+mlruns/
+mlflow.db
 frontend/public/pacman/build/
