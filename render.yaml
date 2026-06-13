@@ -20,22 +20,20 @@ services:
       - key: VITE_API_URL
         value: https://sandbox-backend-tkn2.onrender.com
 
-  # AI gateway (LiteLLM proxy) — own deps, own secrets, own lifecycle.
-  # Secrets use `sync: false`: declared here so the service's required env is
-  # documented, but their VALUES are set in the dashboard/API, never in git.
-  - type: web
-    name: litellm-gateway
-    runtime: python
-    plan: free
-    rootDir: gateway
-    buildCommand: pip install -r requirements.txt
-    startCommand: bash start.sh
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.0
-      - key: LITELLM_MASTER_KEY
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
+  # AI gateway (LiteLLM proxy) is intentionally NOT deployed here. litellm[proxy]
+  # exceeds Render's free-tier 512MB at runtime (OOM), and Starter is also 512MB
+  # — it needs Standard (2GB, paid). It runs locally instead (gateway/start.sh
+  # against the `litellm` Neon DB). To deploy for real, upgrade to a 2GB plan and
+  # restore a service block here:
+  #   - type: web
+  #     name: litellm-gateway
+  #     runtime: python
+  #     plan: standard            # 2GB — free/starter (512MB) OOM
+  #     rootDir: gateway
+  #     buildCommand: pip install -r requirements.txt
+  #     startCommand: bash start.sh
+  #     envVars:                  # secrets sync:false → set in dashboard/API
+  #       - { key: PYTHON_VERSION, value: 3.12.0 }
+  #       - { key: LITELLM_MASTER_KEY, sync: false }
+  #       - { key: DATABASE_URL, sync: false }
+  #       - { key: GEMINI_API_KEY, sync: false }
