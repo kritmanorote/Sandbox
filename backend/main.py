@@ -28,11 +28,16 @@ from langfuse.langchain import CallbackHandler
 # MLflow tracing — local-only for now (mlflow not in requirements.txt, so the
 # Render deploy skips this). Enabled only when MLFLOW_TRACKING_URI is set.
 if os.environ.get("MLFLOW_TRACKING_URI"):
-    import mlflow
+    try:
+        import mlflow
 
-    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-    mlflow.set_experiment("sandbox-chat")
-    mlflow.langchain.autolog()
+        mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+        mlflow.set_experiment("sandbox-chat")
+        mlflow.langchain.autolog()
+    except Exception as e:
+        # Observability setup must never take down the app. If the MLflow
+        # tracking server is unreachable, log and continue without tracing.
+        print(f"Warning: MLflow tracing disabled ({e})")
 
 # OTel path to the same MLflow server — runs ALONGSIDE autolog so the same
 # request produces two traces, one per pipeline, for fidelity comparison.
@@ -367,10 +372,27 @@ def chat_langchain(req: ChatRequest):
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")
 
-    model = ChatGoogleGenerativeAI(
-        model="gemini-3.1-flash-lite",
-        google_api_key=api_key,
-    )
+    # If a LiteLLM gateway is configured, route through it instead of calling
+    # Gemini directly. The app then speaks OpenAI's protocol to the proxy and
+    # holds the PROXY key — the real Gemini key lives only inside the proxy.
+    proxy_url = os.environ.get("LITELLM_PROXY_URL")
+    proxy_key = os.environ.get("LITELLM_PROXY_KEY")
+    if proxy_url:
+        # Fail closed: if the gateway is enabled but no key is configured, refuse
+        # the request rather than silently falling back to a privileged default.
+        if not proxy_key:
+            raise HTTPException(status_code=503, detail="Gateway enabled but LITELLM_PROXY_KEY is not set")
+        from langchain_openai import ChatOpenAI
+        model = ChatOpenAI(
+            model="chat-model",                              # the proxy's alias, not "gemini-..."
+            base_url=proxy_url,                              # the choke point
+            api_key=proxy_key,                               # per-app virtual key, supplied via env
+        )
+    else:
+        model = ChatGoogleGenerativeAI(
+            model="gemini-3.1-flash-lite",
+            google_api_key=api_key,
+        )
     tools = [search_knowledge_base_lc] if req.use_agent else []
     agent = create_react_agent(model, tools=tools)
 

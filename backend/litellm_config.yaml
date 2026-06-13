@@ -1,0 +1,30 @@
+# LiteLLM proxy — an "AI gateway" in front of Gemini.
+# Demonstrates the policy-choke-point pattern at the model-call boundary:
+#   1. Provider abstraction — apps call the alias "chat-model" in OpenAI
+#      format and never know Gemini is behind it. Swap providers here,
+#      not in every app.
+#   2. Credential containment — the Gemini key lives ONLY in this proxy
+#      (read from env). Apps authenticate to the proxy with a separate
+#      master/virtual key. Same containment idea as the OTel collector
+#      holding backend credentials instead of the app pods.
+#   3. Cost visibility — every call is priced and tracked.
+#
+# Run:  litellm --config litellm_config.yaml --port 4000
+
+model_list:
+  - model_name: chat-model                       # provider-agnostic alias apps call
+    litellm_params:
+      model: gemini/gemini-3.1-flash-lite         # the real backend, hidden from callers
+      api_key: os.environ/GEMINI_API_KEY
+      # gemini-3.1-flash-lite isn't in LiteLLM's pricing map, so register
+      # custom per-token pricing — otherwise cost tracking reads $0.
+      input_cost_per_token: 0.0000001
+      output_cost_per_token: 0.0000004
+
+litellm_settings:
+  drop_params: true            # silently drop params Gemini doesn't accept
+  max_budget: 0.05             # global hard spend cap (USD) — persisted in the DB
+  budget_duration: 30d
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY   # resolved from env, never hardcoded
