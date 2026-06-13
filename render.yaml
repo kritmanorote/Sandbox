@@ -19,3 +19,23 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://sandbox-backend-tkn2.onrender.com
+
+  # AI gateway (LiteLLM proxy) — own deps, own secrets, own lifecycle.
+  # Secrets use `sync: false`: declared here so the service's required env is
+  # documented, but their VALUES are set in the dashboard/API, never in git.
+  - type: web
+    name: litellm-gateway
+    runtime: python
+    plan: free
+    rootDir: gateway
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: LITELLM_MASTER_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
