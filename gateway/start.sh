@@ -30,5 +30,6 @@ elif [ -n "$BIN" ] && [ -x "$BIN/litellm.exe" ]; then LITELLM="$BIN/litellm.exe"
 else                                                  LITELLM=litellm
 fi
 
+# Bind 0.0.0.0 so Render can detect the open port (not just localhost).
 # Render provides $PORT; default to 4000 locally.
-exec "$LITELLM" --config litellm_config.yaml --port "${PORT:-4000}"
+exec "$LITELLM" --config litellm_config.yaml --host 0.0.0.0 --port "${PORT:-4000}"
