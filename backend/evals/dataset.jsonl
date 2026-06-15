@@ -1,0 +1,5 @@
+{"inputs": {"question": "how many ghosts are in pacman?"}, "expectations": {"must_use_search": true, "must_mention": ["four"]}}
+{"inputs": {"question": "what are the ghost AI modes in pacman?"}, "expectations": {"must_use_search": true, "must_mention": ["scatter", "chase", "frightened", "eaten"]}}
+{"inputs": {"question": "what game engine is neon dash built with?"}, "expectations": {"must_use_search": true, "must_mention": ["phaser"]}}
+{"inputs": {"question": "what database stores the leaderboard?"}, "expectations": {"must_use_search": true, "must_mention": ["postgres"]}}
+{"inputs": {"question": "what is the capital of France?"}, "expectations": {"must_use_search": false, "must_mention": ["paris"]}}
