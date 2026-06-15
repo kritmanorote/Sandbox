@@ -1,10 +1,10 @@
-{"question": "how many ghosts are in pacman?", "answer": "There are four ghosts: Red, Pink, Cyan, and Orange.", "human_label": true, "note": "correct + complete"}
-{"question": "how many ghosts are in pacman?", "answer": "There are three ghosts.", "human_label": false, "note": "wrong count"}
-{"question": "how many ghosts are in pacman?", "answer": "Four.", "human_label": true, "note": "correct but terse — judge must not penalize brevity"}
-{"question": "how many ghosts are in pacman?", "answer": "Five: Red, Pink, Cyan, Orange, and Green.", "human_label": false, "note": "subtle — invented a fifth ghost"}
-{"question": "what game engine is neon dash built with?", "answer": "Neon Dash is built with Phaser 3.", "human_label": true, "note": "correct"}
-{"question": "what game engine is neon dash built with?", "answer": "Neon Dash is a fun side-scrolling obstacle game.", "human_label": false, "note": "non-responsive — dodges the question"}
-{"question": "what database stores the leaderboard?", "answer": "It uses a MongoDB database.", "human_label": false, "note": "hallucinated — it's Postgres"}
-{"question": "what database stores the leaderboard?", "answer": "A Neon PostgreSQL database.", "human_label": true, "note": "correct"}
-{"question": "what are the ghost AI modes in pacman?", "answer": "Scatter and chase.", "human_label": false, "note": "incomplete — missing frightened and eaten"}
-{"question": "what are the ghost AI modes in pacman?", "answer": "Scatter, chase, frightened, and eaten.", "human_label": true, "note": "correct + complete"}
+{"question": "how many ghosts are in pacman?", "reference": "Pacman has four ghosts: Red, Pink, Cyan, and Orange.", "answer": "There are four ghosts: Red, Pink, Cyan, and Orange.", "human_label": true, "note": "correct + complete"}
+{"question": "how many ghosts are in pacman?", "reference": "Pacman has four ghosts: Red, Pink, Cyan, and Orange.", "answer": "There are three ghosts.", "human_label": false, "note": "wrong count"}
+{"question": "how many ghosts are in pacman?", "reference": "Pacman has four ghosts: Red, Pink, Cyan, and Orange.", "answer": "Four.", "human_label": true, "note": "correct but terse — judge must not penalize brevity"}
+{"question": "how many ghosts are in pacman?", "reference": "Pacman has four ghosts: Red, Pink, Cyan, and Orange.", "answer": "Five: Red, Pink, Cyan, Orange, and Green.", "human_label": false, "note": "subtle — invented a fifth ghost"}
+{"question": "what game engine is neon dash built with?", "reference": "Neon Dash is built with the Phaser 3 game framework.", "answer": "Neon Dash is built with Phaser 3.", "human_label": true, "note": "correct"}
+{"question": "what game engine is neon dash built with?", "reference": "Neon Dash is built with the Phaser 3 game framework.", "answer": "Neon Dash is a fun side-scrolling obstacle game.", "human_label": false, "note": "non-responsive — dodges the question"}
+{"question": "what database stores the leaderboard?", "reference": "The leaderboard is stored in a Neon PostgreSQL database.", "answer": "It uses a MongoDB database.", "human_label": false, "note": "contradicts reference — it's Postgres, not Mongo"}
+{"question": "what database stores the leaderboard?", "reference": "The leaderboard is stored in a Neon PostgreSQL database.", "answer": "A Neon PostgreSQL database.", "human_label": true, "note": "correct"}
+{"question": "what are the ghost AI modes in pacman?", "reference": "The ghost AI modes are scatter, chase, frightened, and eaten.", "answer": "Scatter and chase.", "human_label": false, "note": "incomplete — missing frightened and eaten"}
+{"question": "what are the ghost AI modes in pacman?", "reference": "The ghost AI modes are scatter, chase, frightened, and eaten.", "answer": "Scatter, chase, frightened, and eaten.", "human_label": true, "note": "correct + complete"}

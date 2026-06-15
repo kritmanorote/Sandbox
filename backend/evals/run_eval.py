@@ -24,7 +24,9 @@ import mlflow
 from mlflow.entities import Feedback
 from mlflow.genai.scorers import scorer
 
-from judges import judge_verdict
+# aliased so the scorer functions below can take the descriptive metric names
+from judges import judge_correctness as judge_correctness_fn
+from judges import judge_groundedness as judge_groundedness_fn
 
 mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000"))
 mlflow.set_experiment("sandbox-chat-evals")
@@ -35,8 +37,18 @@ BACKEND = os.environ.get("EVAL_BACKEND_URL", "http://localhost:8000")
 THRESHOLDS = {
     "answer_contains/mean": 0.80,
     "correct_search_behavior/mean": 0.80,
-    "judge_correct/mean": 0.80,
+    "judge_correctness/mean": 0.80,
+    "judge_grounded/mean": 0.80,
 }
+
+
+def _retrieved_context(outputs) -> str:
+    """Flatten the chunks the agent retrieved (tool_calls[].results) into one
+    string — this is the RAG context the groundedness judge checks against."""
+    chunks = []
+    for tc in outputs.get("tool_calls", []):
+        chunks.extend(tc.get("results", []))
+    return "\n".join(chunks)
 
 
 def predict_fn(question: str) -> dict:
@@ -70,10 +82,24 @@ def correct_search_behavior(outputs, expectations) -> bool:
 
 
 @scorer
-def judge_correct(inputs, outputs) -> Feedback:
-    """LLM-as-judge via the shared judge_verdict (the same one calibration
-    validates). Boolean Feedback so it aggregates to a pass rate."""
-    verdict, reason = judge_verdict(inputs["question"], outputs.get("reply", ""))
+def judge_correctness(inputs, outputs, expectations) -> Feedback:
+    """Reference-based: grade the reply against the dataset's ground-truth
+    reference, so the judge verifies facts instead of guessing from memory."""
+    verdict, reason = judge_correctness_fn(
+        inputs["question"], outputs.get("reply", ""), expectations["reference"])
+    return Feedback(value=verdict, rationale=reason)
+
+
+@scorer
+def judge_grounded(outputs, expectations) -> Feedback:
+    """RAG faithfulness: is the reply supported by the retrieved context?
+    N/A when no search was expected (parametric answer, no context to ground in)."""
+    if not expectations["must_use_search"]:
+        return Feedback(value=True, rationale="N/A: no retrieval expected (parametric answer)")
+    context = _retrieved_context(outputs)
+    if not context:
+        return Feedback(value=False, rationale="expected retrieval but agent retrieved nothing")
+    verdict, reason = judge_groundedness_fn(outputs.get("reply", ""), context)
     return Feedback(value=verdict, rationale=reason)
 
 
@@ -85,7 +111,7 @@ def main():
     results = mlflow.genai.evaluate(
         data=data,
         predict_fn=predict_fn,
-        scorers=[answer_contains, correct_search_behavior, judge_correct],
+        scorers=[answer_contains, correct_search_behavior, judge_correctness, judge_grounded],
     )
 
     print("\n=== Gate ===")

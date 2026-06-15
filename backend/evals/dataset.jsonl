@@ -1,5 +1,5 @@
-{"inputs": {"question": "how many ghosts are in pacman?"}, "expectations": {"must_use_search": true, "must_mention": ["four"]}}
-{"inputs": {"question": "what are the ghost AI modes in pacman?"}, "expectations": {"must_use_search": true, "must_mention": ["scatter", "chase", "frightened", "eaten"]}}
-{"inputs": {"question": "what game engine is neon dash built with?"}, "expectations": {"must_use_search": true, "must_mention": ["phaser"]}}
-{"inputs": {"question": "what database stores the leaderboard?"}, "expectations": {"must_use_search": true, "must_mention": ["postgres"]}}
-{"inputs": {"question": "what is the capital of France?"}, "expectations": {"must_use_search": false, "must_mention": ["paris"]}}
+{"inputs": {"question": "how many ghosts are in pacman?"}, "expectations": {"must_use_search": true, "must_mention": ["four"], "reference": "Pacman has four ghosts: Red, Pink, Cyan, and Orange."}}
+{"inputs": {"question": "what are the ghost AI modes in pacman?"}, "expectations": {"must_use_search": true, "must_mention": ["scatter", "chase", "frightened", "eaten"], "reference": "The four ghost AI modes are scatter, chase, frightened, and eaten."}}
+{"inputs": {"question": "what game engine is neon dash built with?"}, "expectations": {"must_use_search": true, "must_mention": ["phaser"], "reference": "Neon Dash is built with the Phaser 3 game framework."}}
+{"inputs": {"question": "what database stores the leaderboard?"}, "expectations": {"must_use_search": true, "must_mention": ["postgres"], "reference": "The leaderboard is stored in a Neon PostgreSQL database."}}
+{"inputs": {"question": "what is the capital of France?"}, "expectations": {"must_use_search": false, "must_mention": ["paris"], "reference": "The capital of France is Paris."}}

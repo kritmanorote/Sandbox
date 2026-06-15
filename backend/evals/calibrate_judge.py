@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from judges import judge_verdict
+from judges import judge_correctness
 
 ACCURACY_BAR = 0.80
 KAPPA_BAR = 0.60
@@ -38,7 +38,7 @@ def main():
     tp = tn = fp = fn = 0
     for r in rows:
         human = bool(r["human_label"])
-        verdict, reason = judge_verdict(r["question"], r["answer"])
+        verdict, reason = judge_correctness(r["question"], r["answer"], r["reference"])
         if verdict and human:       tp += 1; cell = "TP"
         elif not verdict and not human: tn += 1; cell = "TN"
         elif verdict and not human: fp += 1; cell = "FP"   # judge too lenient (DANGER)
