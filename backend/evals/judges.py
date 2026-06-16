@@ -21,8 +21,10 @@ retrieval). Neither is possible without giving the judge the relevant truth.
 """
 import json
 import os
+import time
 
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
 
 _configured = False
 
@@ -37,7 +39,16 @@ def _ensure_configured() -> None:
 def _ask(prompt: str) -> tuple[bool, str]:
     _ensure_configured()
     model = genai.GenerativeModel("gemini-3.1-flash-lite")
-    text = model.generate_content(prompt).text
+    # Free tier is 15 req/min; calibration fires many judge calls in a burst.
+    # Retry on quota errors with backoff rather than failing the run.
+    for attempt in range(6):
+        try:
+            text = model.generate_content(prompt).text
+            break
+        except ResourceExhausted:
+            if attempt == 5:
+                raise
+            time.sleep(15)  # let the per-minute window clear
     try:
         d = json.loads(text[text.index("{"): text.rindex("}") + 1])
         return bool(d["verdict"]), d.get("reason", "")
