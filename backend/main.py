@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 
 from langchain_core.tools import tool
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_postgres import PGVector
 from langgraph.prebuilt import create_react_agent
@@ -366,6 +366,21 @@ def chat(req: ChatRequest):
         raise HTTPException(status_code=502, detail=str(e))
 
 
+# Option A: grounding instruction for the agent. Constrains it to answer only
+# from search_knowledge_base results instead of supplementing with parametric
+# knowledge — closes the groundedness gap the eval gate flagged (judge_grounded
+# was 0.4 because the agent added true-but-unretrieved facts, e.g. ghost names).
+GROUNDING_PROMPT = (
+    "You are an assistant for THIS project (the Neon Dash and Pacman games and "
+    "their backend). For questions about this project, use the search_knowledge_base "
+    "tool and answer using ONLY the information it returns — do NOT add facts from "
+    "your own knowledge, even if you are confident they are correct. If the results "
+    "do not contain the answer, say you don't have that information. For questions "
+    "unrelated to this project, politely decline: do not search, and do not answer "
+    "from general knowledge."
+)
+
+
 @app.post("/chat-langchain")
 def chat_langchain(req: ChatRequest):
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -394,12 +409,21 @@ def chat_langchain(req: ChatRequest):
             google_api_key=api_key,
         )
     tools = [search_knowledge_base_lc] if req.use_agent else []
-    agent = create_react_agent(model, tools=tools)
+
+    # Agent system prompt: the grounding instruction (only meaningful when the
+    # agent has the search tool to ground in) plus any caller-supplied
+    # instruction. Passed via create_react_agent's `prompt` rather than as a
+    # SystemMessage in the conversation, so there's one canonical system prompt.
+    prompt_parts = []
+    if req.use_agent:
+        prompt_parts.append(GROUNDING_PROMPT)
+    if req.system_instruction:
+        prompt_parts.append(req.system_instruction)
+    agent_prompt = "\n\n".join(prompt_parts) or None
+    agent = create_react_agent(model, tools=tools, prompt=agent_prompt)
 
     # Translate the frontend's history into LangChain message types.
     messages = []
-    if req.system_instruction:
-        messages.append(SystemMessage(content=req.system_instruction))
     for m in req.messages:
         if m.role == "user":
             messages.append(HumanMessage(content=m.content))
