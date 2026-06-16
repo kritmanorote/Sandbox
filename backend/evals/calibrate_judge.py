@@ -5,7 +5,7 @@ human ground truth. This validates BOTH judges the gate relies on, each against
 its own hand-labeled fixture (the agent is NOT involved — answers are fixed, so
 the judge is measured in isolation):
 
-  correctness judge  vs  judge_calibration.jsonl       (question+reference+answer)
+  correctness judge  vs  correctness_calibration.jsonl  (question+reference+answer)
   groundedness judge vs  groundedness_calibration.jsonl (context+answer)
 
 For each it reports:
@@ -72,7 +72,7 @@ def calibrate(name: str, rows: list[dict], predict) -> bool:
 
 def main():
     correctness_ok = calibrate(
-        "correctness judge", _load("judge_calibration.jsonl"),
+        "correctness judge", _load("correctness_calibration.jsonl"),
         lambda r: judge_correctness(r["question"], r["answer"], r["reference"]),
     )
     groundedness_ok = calibrate(
