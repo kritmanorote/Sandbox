@@ -1,28 +1,42 @@
-"""Custom input guardrail for the LiteLLM gateway.
+"""Custom input+output security guardrail for the LiteLLM gateway.
 
 Runs in-process at the choke point (no external Presidio/Lakera service) on
-every request, before it reaches the model. Two defenses:
+every request, both directions:
 
-  1. Prompt-injection block — reject requests containing known injection
-     patterns ("ignore previous instructions", etc.).
-  2. PII redaction — strip emails / phones / cards / SSNs from user messages
-     so they never leave to the model provider.
+  pre_call  — block prompt injection (400); redact PII before it reaches the model
+  post_call — redact PII AND credential shapes the model emits, before the
+              reply reaches the caller
 
-Because this lives at the gateway, every app behind it is covered by one
-policy — the security half of the same choke point that does cost/keys.
+Because this lives at the gateway, every app that routes through it is covered
+by one policy — the security half of the same choke point that does cost/keys.
+
+Redactions and blocks are logged HERE (deterministic gateway-side audit), so
+you can confirm a control fired without relying on the model's (non-deterministic)
+output to reveal it.
 
 Registered in litellm_config.yaml:
   guardrails:
-    - guardrail_name: sandbox-input-guard
+    - guardrail_name: sandbox-guard
       litellm_params:
         guardrail: guardrails.SandboxGuardrail
-        mode: pre_call
+        mode: ["pre_call", "post_call"]
         default_on: true
 """
+import logging
 import re
 
 from fastapi import HTTPException
 from litellm.integrations.custom_guardrail import CustomGuardrail
+
+# Dedicated logger with its own handler so the audit always appears in the
+# gateway output regardless of the host's logging config.
+_log = logging.getLogger("sandbox.guardrail")
+if not _log.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(asctime)s [guardrail] %(message)s"))
+    _log.addHandler(_h)
+    _log.setLevel(logging.INFO)
+    _log.propagate = False
 
 _INJECTION = re.compile(
     "|".join([
@@ -43,17 +57,20 @@ _PII = [
     ("PHONE", re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")),
 ]
 
-# Output-specific: credential shapes the model might emit (from context,
-# training, or hallucination). Caught on the response side, not the request.
+# Output-specific: credential shapes the model might emit.
 _SECRETS = [
     ("API_KEY", re.compile(r"\b(?:sk-[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_\-]{30,})\b")),
 ]
 
 
-def _redact(text: str, patterns=_PII) -> str:
+def _redact(text: str, patterns=_PII) -> tuple[str, dict]:
+    """Redact matches; return (redacted_text, {label: count}) for auditing."""
+    hits: dict[str, int] = {}
     for label, rx in patterns:
-        text = rx.sub(f"[REDACTED_{label}]", text)
-    return text
+        text, n = rx.subn(f"[REDACTED_{label}]", text)
+        if n:
+            hits[label] = hits.get(label, 0) + n
+    return text, hits
 
 
 class SandboxGuardrail(CustomGuardrail):
@@ -65,22 +82,27 @@ class SandboxGuardrail(CustomGuardrail):
             if msg.get("role") != "user" or not isinstance(msg.get("content"), str):
                 continue
             if _INJECTION.search(msg["content"]):
-                # Block: reject the request before it reaches the model.
+                _log.warning("BLOCKED request: prompt-injection pattern in input")
                 raise HTTPException(
                     status_code=400,
                     detail="Blocked by gateway guardrail: prompt-injection pattern detected",
                 )
-            # Transform: redact PII so it never leaves to the provider.
-            msg["content"] = _redact(msg["content"])
+            redacted, hits = _redact(msg["content"])
+            if hits:
+                _log.info("redacted PII from input: %s", hits)
+            msg["content"] = redacted
         return data
 
     async def async_post_call_success_hook(self, data, user_api_key_dict, response):
-        # Response side of the choke point: redact PII AND credential shapes the
-        # model emits, before the reply reaches the caller. Defense in depth —
-        # the model can produce sensitive data even when the input was clean.
         for choice in getattr(response, "choices", []):
             msg = getattr(choice, "message", None)
             content = getattr(msg, "content", None)
-            if isinstance(content, str):
-                msg.content = _redact(_redact(content), _SECRETS)
+            if not isinstance(content, str):
+                continue
+            content, pii_hits = _redact(content)
+            content, secret_hits = _redact(content, _SECRETS)
+            hits = {**pii_hits, **secret_hits}
+            if hits:
+                _log.info("redacted from output: %s", hits)
+            msg.content = content
         return response
