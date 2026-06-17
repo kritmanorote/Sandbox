@@ -465,9 +465,13 @@ def chat_langchain(req: ChatRequest):
         # (it's a lazy, gateway-only dependency, absent on Render).
         status = getattr(e, "status_code", None)
         if isinstance(status, int) and 400 <= status < 600:
+            # openai SDK puts the clean message at body["message"]; some errors
+            # nest it under body["error"]["message"]. Try both, then fall back.
             body = getattr(e, "body", None)
-            detail = (body.get("error", {}).get("message") if isinstance(body, dict) else None) \
-                or getattr(e, "message", None) or str(e)
+            detail = None
+            if isinstance(body, dict):
+                detail = body.get("message") or body.get("error", {}).get("message")
+            detail = detail or "Request blocked by gateway policy."
             raise HTTPException(status_code=status, detail=detail)
         raise  # genuine unexpected error → 500
 
