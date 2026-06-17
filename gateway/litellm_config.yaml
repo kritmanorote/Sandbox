@@ -26,5 +26,15 @@ litellm_settings:
   max_budget: 0.05             # global hard spend cap (USD) — persisted in the DB
   budget_duration: 30d
 
+# Security at the choke point: a custom in-process guardrail runs on every
+# request before it reaches the model (blocks prompt injection, redacts PII).
+# See guardrails.py.
+guardrails:
+  - guardrail_name: sandbox-guard
+    litellm_params:
+      guardrail: guardrails.SandboxGuardrail
+      mode: ["pre_call", "post_call"]   # input AND output side of the choke point
+      default_on: true
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY   # resolved from env, never hardcoded
