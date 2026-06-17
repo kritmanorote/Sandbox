@@ -458,10 +458,18 @@ def chat_langchain(req: ChatRequest):
     except GoogleAPIError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        import traceback
-        with open("error_traceback.txt", "w") as f:
-            traceback.print_exc(file=f)
-        raise e
+        # Gateway-path errors come from the openai SDK (ChatOpenAI) and carry an
+        # HTTP status_code — e.g. a guardrail block (400) or per-key budget hit
+        # (429). Surface that status + message cleanly instead of a generic 500.
+        # Duck-typed on status_code so we don't need a top-level openai import
+        # (it's a lazy, gateway-only dependency, absent on Render).
+        status = getattr(e, "status_code", None)
+        if isinstance(status, int) and 400 <= status < 600:
+            body = getattr(e, "body", None)
+            detail = (body.get("error", {}).get("message") if isinstance(body, dict) else None) \
+                or getattr(e, "message", None) or str(e)
+            raise HTTPException(status_code=status, detail=detail)
+        raise  # genuine unexpected error → 500
 
 
 
